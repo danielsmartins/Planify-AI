@@ -8,7 +8,7 @@ import bcrypt from 'bcryptjs';
 
 const secretKey = new TextEncoder().encode(process.env.JWT_SECRET || 'super_secret_key_planify');
 
-export async function encrypt(payload: any) {
+export async function encrypt(payload: { user: { id: string, name: string }, expires: Date } & Record<string, unknown>) {
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -16,7 +16,7 @@ export async function encrypt(payload: any) {
     .sign(secretKey);
 }
 
-export async function decrypt(input: string): Promise<any> {
+export async function decrypt(input: string): Promise<Record<string, unknown> | null> {
   const { payload } = await jwtVerify(input, secretKey, {
     algorithms: ['HS256'],
   });
@@ -67,7 +67,7 @@ export async function register(formData: FormData) {
     });
     
     return { success: true };
-  } catch (err) {
+  } catch {
     return { error: 'Email ou telefone já cadastrado.' };
   }
 }

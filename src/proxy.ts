@@ -23,7 +23,7 @@ export default async function proxy(request: NextRequest) {
       if (isAuthPage) {
         return NextResponse.redirect(new URL('/', request.url));
       }
-    } catch (err) {
+    } catch {
       if (!isAuthPage) {
         return NextResponse.redirect(new URL('/login', request.url));
       }

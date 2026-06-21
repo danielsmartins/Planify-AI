@@ -4,7 +4,7 @@ import { register } from '@/lib/auth';
 import Link from 'next/link';
 
 export default function RegisterPage() {
-  const [state, formAction, pending] = useActionState(async (prevState: any, formData: FormData) => {
+  const [state, formAction, pending] = useActionState(async (prevState: { error: string }, formData: FormData) => {
     const res = await register(formData);
     if (res?.error) return { error: res.error };
     if (res?.success) window.location.href = '/login';

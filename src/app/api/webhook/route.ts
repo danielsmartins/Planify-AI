@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
           amount: extractedData.amount.toString(),
           description: extractedData.description,
           category: extractedData.category,
-          type: extractedData.type as any,
+          type: extractedData.type as "income" | "expense",
         });
 
         // 4. Feedback final

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpRight, ArrowDownLeft, Coffee, ShoppingBag, Car, DollarSign } from 'lucide-react';
+import { ArrowDownLeft, Coffee, ShoppingBag, Car, DollarSign } from 'lucide-react';
 
 export type TransactionType = 'income' | 'expense';
 
