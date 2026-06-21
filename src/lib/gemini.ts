@@ -40,8 +40,11 @@ Regras:
 
     const parsed = JSON.parse(responseText);
     return parsed as ExtractedData;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini Extraction Error:", error);
+    if (error?.status === 429 || (error?.message && (error.message.includes('429') || error.message.toLowerCase().includes('quota')))) {
+      throw new Error('RATE_LIMIT');
+    }
     return null;
   }
 }

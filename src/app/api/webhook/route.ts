@@ -54,7 +54,16 @@ export async function POST(req: NextRequest) {
         // 2. Extrair dados via IA (Gemini)
         await sendWhatsAppMessage(fromPhone, "⏳ Analisando sua mensagem com Inteligência Artificial...");
         
-        const extractedData = await extractFinancialData(textMessage);
+        let extractedData;
+        try {
+          extractedData = await extractFinancialData(textMessage);
+        } catch (e: any) {
+          if (e.message === 'RATE_LIMIT') {
+             await sendWhatsAppMessage(fromPhone, "⚠️ *Alerta*: Limite grátis de Inteligência Artificial atingido! A cota do Google Gemini expirou por enquanto. Tente novamente mais tarde.");
+             return NextResponse.json({ status: "Rate limited" });
+          }
+          throw e;
+        }
 
         if (!extractedData) {
           await sendWhatsAppMessage(fromPhone, "🤔 Não consegui identificar um gasto ou ganho nessa mensagem. Pode tentar escrever de outra forma? Ex: 'Uber 25 reais'.");

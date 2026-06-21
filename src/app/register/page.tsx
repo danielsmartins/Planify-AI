@@ -53,7 +53,7 @@ export default function RegisterPage() {
             <input 
               type="text" 
               name="phone" 
-              placeholder="11999999999"
+              placeholder="(xx) xxxxx-xxxx"
               className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-brand transition-colors"
               required 
             />
