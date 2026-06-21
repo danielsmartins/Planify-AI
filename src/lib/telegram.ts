@@ -1,4 +1,4 @@
-export async function sendTelegramMessage(chatId: string, text: string) {
+export async function sendTelegramMessage(chatId: string, text: string, replyMarkup?: any) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
     console.error("TELEGRAM_BOT_TOKEN is not set.");
@@ -17,6 +17,7 @@ export async function sendTelegramMessage(chatId: string, text: string) {
         chat_id: chatId,
         text: text,
         parse_mode: "Markdown",
+        reply_markup: replyMarkup,
       }),
     });
 
@@ -26,5 +27,24 @@ export async function sendTelegramMessage(chatId: string, text: string) {
     }
   } catch (error) {
     console.error("Failed to send Telegram message:", error);
+  }
+}
+
+export async function answerCallbackQuery(callbackQueryId: string, text?: string) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+
+  const url = `https://api.telegram.org/bot${token}/answerCallbackQuery`;
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        callback_query_id: callbackQueryId,
+        text: text,
+      }),
+    });
+  } catch (error) {
+    console.error("Failed to answer callback query:", error);
   }
 }

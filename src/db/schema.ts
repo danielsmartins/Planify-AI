@@ -20,5 +20,6 @@ export const transactions = pgTable('transactions', {
   description: text('description').notNull(),
   category: text('category').notNull().default('Outros'),
   type: text('type', { enum: ['income', 'expense'] }).notNull(),
+  status: text('status', { enum: ['pending', 'confirmed'] }).default('confirmed').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });

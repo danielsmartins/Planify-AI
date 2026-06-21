@@ -5,7 +5,7 @@ import { getSession, logout } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { db } from '@/db';
 import { transactions } from '@/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import { ActionButtons } from '@/components/dashboard/ActionButtons';
 
 export default async function Home() {
@@ -17,10 +17,13 @@ export default async function Home() {
 
   const firstName = session.user.name.split(' ')[0];
 
-  // Buscando transações reais
+  // Buscando transações reais (apenas confirmadas)
   const userTransactions = await db.select()
     .from(transactions)
-    .where(eq(transactions.userId, session.user.id))
+    .where(and(
+      eq(transactions.userId, session.user.id),
+      eq(transactions.status, 'confirmed')
+    ))
     .orderBy(desc(transactions.createdAt));
 
   let totalIncome = 0;
@@ -54,7 +57,7 @@ export default async function Home() {
           </form>
           
           <a 
-            href={`https://t.me/PlanifyAIBot?start=${session.user.id}`} 
+            href={`https://t.me/${process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'SeuBot'}?start=${session.user.id}`} 
             target="_blank" 
             className="glass-panel flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-slate-800/50 transition-colors cursor-pointer border border-[#0088cc]/30 text-[#0088cc] hover:text-[#0088cc] hover:border-[#0088cc]"
           >
@@ -100,7 +103,7 @@ export default async function Home() {
               <Wallet size={32} className="text-slate-400" />
             </div>
             <p className="text-slate-300 font-medium mb-1">Nenhuma transação encontrada</p>
-            <p className="text-slate-500 text-sm">Adicione uma despesa aqui no site ou envie uma mensagem no WhatsApp!</p>
+            <p className="text-slate-500 text-sm">Adicione uma despesa aqui no site ou envie uma mensagem no Telegram!</p>
           </div>
         ) : (
           <div className="flex flex-col gap-1">

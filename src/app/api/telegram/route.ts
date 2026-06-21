@@ -3,13 +3,34 @@ import { db } from "@/db";
 import { users, transactions } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { extractFinancialData } from "@/lib/gemini";
-import { sendTelegramMessage } from "@/lib/telegram";
+import { sendTelegramMessage, answerCallbackQuery } from "@/lib/telegram";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    
-    // As mensagens do Telegram vêm dentro de 'message'
+    console.log("=== WEBHOOK RECEBIDO ===", JSON.stringify(body, null, 2));
+
+    // Lidar com cliques nos botões (callback_query)
+    if (body.callback_query) {
+      const callbackQuery = body.callback_query;
+      const callbackData = callbackQuery.data; // ex: confirm_123, cancel_123
+      const chatId = callbackQuery.message.chat.id.toString();
+
+      if (callbackData.startsWith('confirm_')) {
+        const txId = callbackData.split('_')[1];
+        await db.update(transactions).set({ status: 'confirmed' }).where(eq(transactions.id, txId));
+        await sendTelegramMessage(chatId, "✅ Transação confirmada e salva com sucesso!");
+      } else if (callbackData.startsWith('cancel_')) {
+        const txId = callbackData.split('_')[1];
+        await db.delete(transactions).where(eq(transactions.id, txId));
+        await sendTelegramMessage(chatId, "❌ Transação cancelada.");
+      }
+
+      await answerCallbackQuery(callbackQuery.id);
+      return NextResponse.json({ status: "Callback processed" });
+    }
+
+    // As mensagens de texto vêm dentro de 'message'
     const message = body.message;
     if (!message || !message.text || !message.chat) {
       return NextResponse.json({ status: "Ignored" });
@@ -67,19 +88,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ status: "Ignored text" });
     }
 
-    // 4. Salvar no banco (Drizzle)
-    await db.insert(transactions).values({
+    // 4. Salvar no banco (Drizzle) como 'pending'
+    const [newTx] = await db.insert(transactions).values({
       userId: user.id,
       amount: extractedData.amount.toString(),
       description: extractedData.description,
       category: extractedData.category,
       type: extractedData.type as "income" | "expense",
-    });
+      status: 'pending', // Fica aguardando confirmação
+    }).returning();
 
-    // 5. Feedback final
+    // 5. Feedback final com botões
     const tipo = extractedData.type === 'income' ? 'Entrada' : 'Saída';
     const icone = extractedData.type === 'income' ? '✅' : '💸';
-    await sendTelegramMessage(chatId, `${icone} *Sucesso!*\n\nTipo: *${tipo}*\nDescrição: *${extractedData.description}*\nValor: *R$ ${extractedData.amount}*\nCategoria: *${extractedData.category}*\n\nJá atualizei o seu painel web!`);
+    const replyMarkup = {
+      inline_keyboard: [
+        [
+          { text: "✅ Confirmar", callback_data: `confirm_${newTx.id}` },
+          { text: "❌ Cancelar", callback_data: `cancel_${newTx.id}` }
+        ]
+      ]
+    };
+
+    await sendTelegramMessage(chatId, `${icone} *Revisão de Transação*\n\nTipo: *${tipo}*\nDescrição: *${extractedData.description}*\nValor: *R$ ${extractedData.amount}*\nCategoria: *${extractedData.category}*\n\nVocê confirma esta transação?`, replyMarkup);
 
     return NextResponse.json({ status: "Success" });
 
