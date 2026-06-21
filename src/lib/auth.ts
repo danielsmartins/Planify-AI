@@ -6,9 +6,17 @@ import { users } from '@/db/schema';
 import { eq, or } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 
+export interface SessionPayload {
+  user: {
+    id: string;
+    name: string;
+  };
+  expires: string | Date;
+}
+
 const secretKey = new TextEncoder().encode(process.env.JWT_SECRET || 'super_secret_key_planify');
 
-export async function encrypt(payload: { user: { id: string, name: string }, expires: Date } & Record<string, unknown>) {
+export async function encrypt(payload: SessionPayload & Record<string, unknown>) {
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -16,11 +24,11 @@ export async function encrypt(payload: { user: { id: string, name: string }, exp
     .sign(secretKey);
 }
 
-export async function decrypt(input: string): Promise<Record<string, unknown> | null> {
+export async function decrypt(input: string): Promise<SessionPayload | null> {
   const { payload } = await jwtVerify(input, secretKey, {
     algorithms: ['HS256'],
   });
-  return payload;
+  return payload as unknown as SessionPayload;
 }
 
 export async function login(formData: FormData) {
