@@ -1,12 +1,11 @@
 import { StatCard } from '@/components/dashboard/StatCard';
 import { TransactionRow, TransactionType } from '@/components/dashboard/TransactionRow';
-import { Wallet, TrendingUp, TrendingDown, MessageCircle, LogOut } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, LogOut, Send } from 'lucide-react';
 import { getSession, logout } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { db } from '@/db';
 import { transactions } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
-import Link from 'next/link';
 import { ActionButtons } from '@/components/dashboard/ActionButtons';
 
 export default async function Home() {
@@ -54,14 +53,14 @@ export default async function Home() {
             </button>
           </form>
           
-          <Link 
-            href={`https://wa.me/15551234567?text=Oi`} 
+          <a 
+            href={`https://t.me/PlanifyAIBot?start=${session.user.id}`} 
             target="_blank" 
-            className="glass-panel flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-slate-800/50 transition-colors cursor-pointer"
+            className="glass-panel flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-slate-800/50 transition-colors cursor-pointer border border-[#0088cc]/30 text-[#0088cc] hover:text-[#0088cc] hover:border-[#0088cc]"
           >
-            <MessageCircle size={18} className="text-emerald-400" />
-            <span>Ver WhatsApp</span>
-          </Link>
+            <Send size={18} />
+            <span>Conectar Telegram</span>
+          </a>
           
           <ActionButtons />
         </div>

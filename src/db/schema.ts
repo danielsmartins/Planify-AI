@@ -4,7 +4,8 @@ export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   email: text('email').unique().notNull(),
-  phone: text('phone').unique().notNull(), // WhatsApp number
+  phone: text('phone').unique(), // Tornando opcional
+  telegramChatId: text('telegram_chat_id').unique(), // Para conectar com o bot
   password: text('password').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });

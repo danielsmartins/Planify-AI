@@ -49,13 +49,12 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Telefone (WhatsApp)</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Telefone (Opcional)</label>
             <input 
               type="text" 
               name="phone" 
               placeholder="(xx) xxxxx-xxxx"
               className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-brand transition-colors"
-              required 
             />
           </div>
           

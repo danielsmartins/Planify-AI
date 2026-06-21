@@ -40,10 +40,18 @@ Regras:
 
     const parsed = JSON.parse(responseText);
     return parsed as ExtractedData;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Gemini Extraction Error:", error);
-    if (error?.status === 429 || (error?.message && (error.message.includes('429') || error.message.toLowerCase().includes('quota')))) {
-      throw new Error('RATE_LIMIT');
+    if (typeof error === 'object' && error !== null) {
+      const errStatus = 'status' in error ? (error as { status: unknown }).status : null;
+      const errMsg = 'message' in error ? (error as { message: unknown }).message : null;
+      
+      const statusIs429 = errStatus === 429;
+      const msgContains429 = typeof errMsg === 'string' && (errMsg.includes('429') || errMsg.toLowerCase().includes('quota'));
+
+      if (statusIs429 || msgContains429) {
+        throw new Error('RATE_LIMIT');
+      }
     }
     return null;
   }

@@ -62,7 +62,7 @@ export async function register(formData: FormData) {
   const phone = formData.get('phone') as string;
   const password = formData.get('password') as string;
 
-  if (!name || !email || !phone || !password) return { error: 'Preencha todos os campos.' };
+  if (!name || !email || !password) return { error: 'Preencha todos os campos obrigatórios.' };
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -70,7 +70,7 @@ export async function register(formData: FormData) {
     await db.insert(users).values({
       name,
       email,
-      phone,
+      phone: phone || null,
       password: hashedPassword,
     });
     
