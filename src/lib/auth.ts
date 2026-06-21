@@ -1,3 +1,4 @@
+'use server';
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { db } from '@/db';
@@ -23,7 +24,6 @@ export async function decrypt(input: string): Promise<any> {
 }
 
 export async function login(formData: FormData) {
-  'use server';
   const identifier = formData.get('identifier') as string;
   const password = formData.get('password') as string;
 
@@ -49,7 +49,6 @@ export async function login(formData: FormData) {
 }
 
 export async function register(formData: FormData) {
-  'use server';
   const name = formData.get('name') as string;
   const email = formData.get('email') as string;
   const phone = formData.get('phone') as string;
@@ -74,7 +73,6 @@ export async function register(formData: FormData) {
 }
 
 export async function logout() {
-  'use server';
   const cookieStore = await cookies();
   cookieStore.delete('session');
 }
