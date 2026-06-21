@@ -48,6 +48,10 @@ export default async function Home() {
             Olá, <span className="text-gradient">{firstName}</span> 👋
           </h1>
           <p className="text-slate-400">Aqui está o resumo das suas finanças neste mês.</p>
+          <div className="inline-flex items-center gap-2 bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-700/50 mt-4">
+            <span className="text-xs text-slate-400">Vincular manualmente no Telegram:</span>
+            <code className="text-xs text-[#0088cc] select-all font-mono">/start {session.user.id}</code>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <form action={logout}>
