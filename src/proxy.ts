@@ -4,7 +4,7 @@ import { jwtVerify } from 'jose';
 
 const secretKey = new TextEncoder().encode(process.env.JWT_SECRET || 'super_secret_key_planify');
 
-export async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const session = request.cookies.get('session')?.value;
   const isAuthPage = request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/register');
   
