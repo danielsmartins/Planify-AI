@@ -1,4 +1,4 @@
-export async function sendTelegramMessage(chatId: string, text: string, replyMarkup?: any) {
+export async function sendTelegramMessage(chatId: string, text: string, replyMarkup?: Record<string, unknown>) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
     console.error("TELEGRAM_BOT_TOKEN is not set.");
