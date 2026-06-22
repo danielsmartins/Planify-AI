@@ -10,7 +10,7 @@ export interface ExtractedData {
   type: 'income' | 'expense';
 }
 
-export async function extractFinancialData(text: string): Promise<ExtractedData | null> {
+export async function extractFinancialData(text: string, existingCategories: string[] = []): Promise<ExtractedData | null> {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
@@ -27,10 +27,14 @@ Formato esperado:
   "category": string (uma palavra que classifique. ex: Alimentação, Transporte, Saúde, Salário, Compras, etc),
   "type": string ("income" se for entrada de dinheiro/ganho, ou "expense" se for um gasto/despesa)
 }
+}
+
+Categorias existentes do usuário: ${existingCategories.length > 0 ? existingCategories.join(', ') : 'Nenhuma categoria cadastrada'}.
 
 Regras:
-1. Se a mensagem não parecer uma transação financeira, retorne null.
-2. Apenas retorne o JSON puro e válido. Não coloque crases (\`\`\`).
+1. Tente classificar a despesa/ganho em uma das categorias existentes. SE NÃO SE ENCAIXAR em nenhuma, crie UMA NOVA CATEGORIA que seja concisa e faça sentido (ex: Saúde, Educação, Casa).
+2. Se a mensagem não parecer uma transação financeira, retorne null.
+3. Apenas retorne o JSON puro e válido. Não coloque crases (\`\`\`).
 `;
 
     const result = await model.generateContent(prompt);

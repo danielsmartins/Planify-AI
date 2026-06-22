@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { users, transactions } from "@/db/schema";
+import { users, transactions, categories } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { extractFinancialData } from "@/lib/gemini";
 import { sendTelegramMessage, answerCallbackQuery } from "@/lib/telegram";
@@ -72,9 +72,12 @@ export async function POST(req: NextRequest) {
     // 3. Extrair dados via IA (Gemini)
     await sendTelegramMessage(chatId, "⏳ Analisando sua mensagem...");
     
+    const userCategoriesObj = await db.select().from(categories).where(eq(categories.userId, user.id));
+    const userCategories = userCategoriesObj.map(c => c.name);
+
     let extractedData;
     try {
-      extractedData = await extractFinancialData(textMessage);
+      extractedData = await extractFinancialData(textMessage, userCategories);
     } catch (e: unknown) {
       if (e instanceof Error && e.message === 'RATE_LIMIT') {
           await sendTelegramMessage(chatId, "⚠️ *Alerta*: Limite grátis de Inteligência Artificial atingido! A cota expirou por enquanto. Tente novamente mais tarde.");
@@ -86,6 +89,18 @@ export async function POST(req: NextRequest) {
     if (!extractedData) {
       await sendTelegramMessage(chatId, "🤔 Não consegui identificar um gasto ou ganho nessa mensagem. Pode tentar escrever de outra forma?\n\nExemplo: `Uber 25 reais`");
       return NextResponse.json({ status: "Ignored text" });
+    }
+
+    // Se a IA criou uma categoria nova, salvamos no banco!
+    if (!userCategories.includes(extractedData.category) && extractedData.type === 'expense') {
+      const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6'];
+      const randomColor = colors[Math.floor(Math.random() * colors.length)];
+      await db.insert(categories).values({
+        userId: user.id,
+        name: extractedData.category,
+        color: randomColor,
+        monthlyLimit: '0'
+      });
     }
 
     // 4. Salvar no banco (Drizzle) como 'pending'

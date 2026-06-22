@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { transactions } from '@/db/schema';
 import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
+import { eq, and } from 'drizzle-orm';
 import { extractFinancialData } from '@/lib/gemini';
 
 export async function createTransaction(formData: FormData) {
@@ -57,4 +58,46 @@ export async function addTransactionViaAI(text: string) {
     }
     return { error: 'Erro interno ao processar com IA.' };
   }
+}
+
+export async function deleteTransaction(id: string) {
+  const session = await getSession();
+  if (!session) return { error: 'Not authenticated' };
+
+  await db.delete(transactions).where(
+    and(
+      eq(transactions.id, id),
+      eq(transactions.userId, session.user.id)
+    )
+  );
+
+  revalidatePath('/');
+  return { success: true };
+}
+
+export async function updateTransaction(id: string, formData: FormData) {
+  const session = await getSession();
+  if (!session) return { error: 'Not authenticated' };
+
+  const description = formData.get('description') as string;
+  const amount = formData.get('amount') as string;
+  const category = formData.get('category') as string;
+
+  if (!description || !amount || !category) {
+    return { error: 'Preencha todos os campos.' };
+  }
+
+  await db.update(transactions).set({
+    amount: amount,
+    description: description,
+    category: category,
+  }).where(
+    and(
+      eq(transactions.id, id),
+      eq(transactions.userId, session.user.id)
+    )
+  );
+
+  revalidatePath('/');
+  return { success: true };
 }

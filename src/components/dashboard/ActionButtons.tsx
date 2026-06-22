@@ -2,8 +2,9 @@
 import { useState } from 'react';
 import { Plus, Receipt, X, Sparkles } from 'lucide-react';
 import { createTransaction, addTransactionViaAI } from '@/app/actions';
+import Link from 'next/link';
 
-export function ActionButtons() {
+export function ActionButtons({ categories }: { categories: any[] }) {
   const [isOpen, setIsOpen] = useState(false);
   const [type, setType] = useState<'income' | 'expense' | 'ai'>('expense');
   const [loading, setLoading] = useState(false);
@@ -85,8 +86,19 @@ export function ActionButtons() {
                     <input required name="amount" type="number" step="0.01" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder="0.00" />
                   </div>
                   <div>
-                    <label className="block text-sm text-slate-300 mb-1">Categoria</label>
-                    <input required name="category" type="text" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder="Ex: Serviços" />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm text-slate-300">Categoria</label>
+                      <Link href="/categories" className="text-xs text-brand hover:underline">Criar nova</Link>
+                    </div>
+                    {categories.length > 0 ? (
+                      <select required name="category" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors">
+                        {categories.map(c => (
+                          <option key={c.id} value={c.name}>{c.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input required name="category" type="text" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder="Ex: Serviços" />
+                    )}
                   </div>
                   <button disabled={loading} type="submit" className="w-full bg-brand hover:bg-brand-dark text-white font-medium py-3 rounded-xl mt-4 cursor-pointer disabled:opacity-50">
                     {loading ? 'Salvando...' : 'Salvar Transação'}

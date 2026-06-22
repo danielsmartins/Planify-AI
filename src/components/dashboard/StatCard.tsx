@@ -12,7 +12,7 @@ interface StatCardProps {
 
 export function StatCard({ title, amount, icon: Icon, trend, trendValue, isAccent }: StatCardProps) {
   return (
-    <div className={`glass-panel rounded-2xl p-6 relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${isAccent ? 'border-brand/30' : ''}`}>
+    <div className={`h-full flex flex-col justify-between glass-panel rounded-2xl p-6 relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${isAccent ? 'border-brand/30' : ''}`}>
       {isAccent && (
         <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-brand opacity-20 blur-3xl rounded-full" />
       )}

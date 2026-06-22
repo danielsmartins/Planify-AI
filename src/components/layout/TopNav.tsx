@@ -1,0 +1,35 @@
+import Link from 'next/link';
+import { getSession } from '@/lib/auth';
+import { LayoutDashboard, BarChart3, Tags, Sparkles } from 'lucide-react';
+
+export async function TopNav() {
+  const session = await getSession();
+  
+  if (!session) return null;
+
+  return (
+    <nav className="glass-panel mb-8 p-4 rounded-2xl flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <Sparkles className="text-brand" size={24} />
+        <span className="font-bold text-xl tracking-tight hidden sm:block">Planify AI</span>
+      </div>
+      
+      <div className="flex items-center gap-2 sm:gap-6">
+        <Link href="/" className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-brand transition-colors px-3 py-2 rounded-lg hover:bg-brand/10">
+          <LayoutDashboard size={18} />
+          <span className="hidden sm:block">Dashboard</span>
+        </Link>
+        
+        <Link href="/analytics" className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-brand transition-colors px-3 py-2 rounded-lg hover:bg-brand/10">
+          <BarChart3 size={18} />
+          <span className="hidden sm:block">Análises</span>
+        </Link>
+        
+        <Link href="/categories" className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-brand transition-colors px-3 py-2 rounded-lg hover:bg-brand/10">
+          <Tags size={18} />
+          <span className="hidden sm:block">Categorias</span>
+        </Link>
+      </div>
+    </nav>
+  );
+}

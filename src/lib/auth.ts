@@ -2,7 +2,7 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { db } from '@/db';
-import { users } from '@/db/schema';
+import { users, categories } from '@/db/schema';
 import { eq, or } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 
@@ -67,12 +67,19 @@ export async function register(formData: FormData) {
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    await db.insert(users).values({
+    const [newUser] = await db.insert(users).values({
       name,
       email,
       phone: phone || null,
       password: hashedPassword,
-    });
+    }).returning();
+    
+    await db.insert(categories).values([
+      { userId: newUser.id, name: 'Alimentação', color: '#ef4444' },
+      { userId: newUser.id, name: 'Transporte', color: '#f59e0b' },
+      { userId: newUser.id, name: 'Lazer', color: '#8b5cf6' },
+      { userId: newUser.id, name: 'Moradia', color: '#3b82f6' },
+    ]);
     
     return { success: true };
   } catch {

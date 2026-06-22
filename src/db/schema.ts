@@ -23,3 +23,15 @@ export const transactions = pgTable('transactions', {
   status: text('status', { enum: ['pending', 'confirmed'] }).default('confirmed').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
+
+export const categories = pgTable('categories', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id).notNull(),
+  name: text('name').notNull(),
+  color: text('color').notNull(),
+  monthlyLimit: numeric('monthly_limit').default('0').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export type Category = typeof categories.$inferSelect;
+export type NewCategory = typeof categories.$inferInsert;
