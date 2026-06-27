@@ -18,6 +18,25 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
   const [isAdding, setIsAdding] = useState(false);
   const [editingCard, setEditingCard] = useState<CardProps | null>(null);
 
+  const [formName, setFormName] = useState('');
+  const [formColor, setFormColor] = useState('#8b5cf6');
+
+  const CARD_TEMPLATES = [
+    { name: 'Nubank', color: '#8A05BE' },
+    { name: 'Itaú', color: '#EC7000' },
+    { name: 'Inter', color: '#FF7A00' },
+    { name: 'C6 Bank', color: '#242424' },
+    { name: 'Santander', color: '#CC0000' },
+    { name: 'Bradesco', color: '#CC092F' },
+    { name: 'Banco do Brasil', color: '#F8D117' },
+    { name: 'Caixa', color: '#005CA9' },
+  ];
+
+  const handleTemplateClick = (template: typeof CARD_TEMPLATES[0]) => {
+    setFormName(template.name);
+    setFormColor(template.color);
+  };
+
   const formatBRL = (val: string | number) => {
     return Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
@@ -74,18 +93,26 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
          </div>
         ) : (
           cards.map((card) => (
-            <div key={card.id} className="relative group overflow-hidden rounded-2xl aspect-[1.6/1] p-6 flex flex-col justify-between" style={{ backgroundColor: card.color }}>
+            <div key={card.id} className="relative group overflow-hidden rounded-2xl aspect-[1.6/1] p-6 flex flex-col justify-between shadow-xl" style={{ background: `linear-gradient(135deg, ${card.color} 0%, ${card.color}cc 100%)` }}>
               {/* Efeito de Vidro por cima da cor para ficar premium */}
-              <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-all group-hover:bg-black/50 z-0"></div>
+              <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] transition-all group-hover:bg-black/30 z-0"></div>
+              
+              {/* Círculos decorativos estilo Mastercard / Layout de Cartão */}
+              <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+              <div className="absolute -bottom-8 -left-8 w-24 h-24 bg-black/20 rounded-full blur-xl pointer-events-none"></div>
               
               <div className="relative z-10 flex justify-between items-start">
                 <div className="flex items-center gap-2">
                   <CreditCard className="text-white/80" />
                   <span className="font-bold text-white tracking-wide">{card.name}</span>
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
                   <button 
-                    onClick={() => setEditingCard(card)}
+                    onClick={() => {
+                      setEditingCard(card);
+                      setFormName(card.name);
+                      setFormColor(card.color);
+                    }}
                     className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors backdrop-blur-md"
                   >
                     <Edit2 size={14} />
@@ -97,6 +124,19 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
                     <Trash2 size={14} />
                   </button>
                 </div>
+              </div>
+
+              <div className="relative z-10 mt-auto mb-4">
+                 {/* Estilo de chip metálico simulado e número oculto */}
+                 <div className="flex justify-between items-center opacity-70">
+                    <div className="w-10 h-7 rounded bg-gradient-to-br from-slate-200 to-slate-400 border border-slate-100/50 opacity-90 shadow-sm"></div>
+                    <div className="flex gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-white/70"></span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-white/70"></span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-white/70"></span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-white/70"></span>
+                    </div>
+                 </div>
               </div>
 
               <div className="relative z-10 flex items-end justify-between">
@@ -119,9 +159,10 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
                   )}
                 </div>
                 
-                {/* Chip decoration */}
-                <div className="w-10 h-8 rounded bg-white/20 border border-white/10 flex items-center justify-center">
-                  <Settings size={16} className="text-white/40" />
+                {/* Decoration Circles (Mastercard style indicator) */}
+                <div className="flex">
+                  <div className="w-6 h-6 rounded-full bg-white/40 -mr-2"></div>
+                  <div className="w-6 h-6 rounded-full bg-white/20 backdrop-blur-md"></div>
                 </div>
               </div>
             </div>
@@ -134,7 +175,7 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md relative animate-in fade-in zoom-in duration-200">
             <button 
-              onClick={() => { setIsAdding(false); setEditingCard(null); }} 
+              onClick={() => { setIsAdding(false); setEditingCard(null); setFormName(''); setFormColor('#8b5cf6'); }} 
               className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
             >
               <X size={20}/>
@@ -142,26 +183,48 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
             <h2 className="text-xl font-bold mb-6">{isAdding ? 'Adicionar Cartão' : 'Editar Cartão'}</h2>
 
             <form onSubmit={isAdding ? handleAdd : handleEdit} className="flex flex-col gap-4">
+              {/* Templates */}
               <div>
-                <label className="block text-sm text-slate-300 mb-1">Nome do Cartão (ex: Nubank)</label>
-                <input 
-                  type="text" 
-                  name="name" 
-                  required
-                  defaultValue={editingCard?.name || ''}
-                  className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-3 py-2 text-sm text-slate-100 focus:border-brand focus:outline-none transition-colors"
-                />
+                <label className="block text-xs text-slate-400 mb-2">Templates Rápidos</label>
+                <div className="flex flex-wrap gap-2">
+                  {CARD_TEMPLATES.map(t => (
+                    <button 
+                      type="button" 
+                      key={t.name}
+                      onClick={() => handleTemplateClick(t)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-transform hover:scale-105 active:scale-95"
+                      style={{ backgroundColor: t.color, textShadow: '0px 1px 2px rgba(0,0,0,0.5)' }}
+                    >
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm text-slate-300 mb-1">Cor do Cartão</label>
-                <input 
-                  type="color" 
-                  name="color" 
-                  required
-                  defaultValue={editingCard?.color || '#8b5cf6'}
-                  className="w-full h-10 bg-slate-900/50 border border-slate-700/50 rounded-xl px-2 py-1 cursor-pointer focus:border-brand focus:outline-none transition-colors"
-                />
+              <div className="grid grid-cols-[1fr,auto] gap-4">
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">Nome do Cartão</label>
+                  <input 
+                    type="text" 
+                    name="name" 
+                    required
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-3 py-2 text-sm text-slate-100 focus:border-brand focus:outline-none transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">Cor</label>
+                  <input 
+                    type="color" 
+                    name="color" 
+                    required
+                    value={formColor}
+                    onChange={(e) => setFormColor(e.target.value)}
+                    className="w-14 h-10 bg-slate-900/50 border border-slate-700/50 rounded-xl px-1 py-1 cursor-pointer focus:border-brand focus:outline-none transition-colors"
+                  />
+                </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4">
