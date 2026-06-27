@@ -41,3 +41,28 @@ export async function deleteCategory(id: string) {
   revalidatePath('/categories');
   return { success: true };
 }
+
+export async function updateCategory(id: string, formData: FormData) {
+  const session = await getSession();
+  if (!session) throw new Error('Unauthorized');
+
+  const name = formData.get('name') as string;
+  const color = formData.get('color') as string;
+  const limit = formData.get('monthlyLimit') as string;
+
+  if (!name || !color) throw new Error('Invalid data');
+
+  await db.update(categories).set({
+    name,
+    color,
+    monthlyLimit: limit ? parseFloat(limit).toString() : '0',
+  }).where(
+    and(
+      eq(categories.id, id),
+      eq(categories.userId, session.user.id)
+    )
+  );
+
+  revalidatePath('/categories');
+  return { success: true };
+}
