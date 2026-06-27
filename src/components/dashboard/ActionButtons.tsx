@@ -9,7 +9,13 @@ interface CategoryProps {
   name: string;
 }
 
-export function ActionButtons({ categories }: { categories: CategoryProps[] }) {
+interface CreditCardProps {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export function ActionButtons({ categories, creditCards = [] }: { categories: CategoryProps[], creditCards?: CreditCardProps[] }) {
   const [isOpen, setIsOpen] = useState(false);
   const [type, setType] = useState<'income' | 'expense' | 'ai'>('expense');
   const [loading, setLoading] = useState(false);
@@ -133,6 +139,21 @@ export function ActionButtons({ categories }: { categories: CategoryProps[] }) {
                       <input required name="category" type="text" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder="Ex: Serviços" />
                     )}
                   </div>
+
+                  {type === 'expense' && creditCards.length > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-sm text-slate-300">Cartão de Crédito (Opcional)</label>
+                        <Link href="/cards" className="text-xs text-brand hover:underline" onClick={resetState}>Gerenciar</Link>
+                      </div>
+                      <select name="creditCardId" defaultValue="" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors">
+                        <option value="">Nenhum (Débito/Dinheiro)</option>
+                        {creditCards.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   {type === 'expense' && (
                     <div className="flex items-center gap-2 mt-2">

@@ -34,6 +34,11 @@ export async function TopNav() {
           <CreditCard size={18} />
           <span className="hidden sm:block">Parcelamentos</span>
         </Link>
+        
+        <Link href="/cards" className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-brand transition-colors px-3 py-2 rounded-lg hover:bg-brand/10">
+          <CreditCard size={18} />
+          <span className="hidden sm:block">Cartões</span>
+        </Link>
       </div>
     </nav>
   );

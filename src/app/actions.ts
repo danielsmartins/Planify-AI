@@ -1,11 +1,30 @@
 'use server';
 
 import { db } from '@/db';
-import { transactions, installments } from '@/db/schema';
+import { transactions, installments, creditCards } from '@/db/schema';
 import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { eq, and } from 'drizzle-orm';
 import { extractFinancialData } from '@/lib/gemini';
+
+function calculateCreditCardDate(baseDate: Date, closingDay: number, dueDay: number): Date {
+  const resultDate = new Date(baseDate);
+  const currentDay = resultDate.getDate();
+  
+  // O mês do vencimento será ajustado com base no dia de fechamento
+  if (currentDay >= closingDay) {
+    // Se a data já passou (ou é igual) ao dia de fechamento, a fatura só vem no mês subsequente
+    resultDate.setMonth(resultDate.getMonth() + 1);
+  }
+  
+  // E o dia exato será o dueDay (se o mes mudar e n tiver esse dia, o JS ajusta)
+  resultDate.setDate(dueDay);
+
+  // Tratando corner cases se dueDay for 31 e o mês cair em Fev, resultDate vai pro mes seguinte
+  // Mas new Date(2026, 1, 31) vira Março 3, que geralmente as operadoras ajustam pro último dia util
+  // Pra manter simples, vamos deixar o JS converter.
+  return resultDate;
+}
 
 export async function createTransaction(formData: FormData) {
   const session = await getSession();
@@ -15,9 +34,20 @@ export async function createTransaction(formData: FormData) {
   const amount = formData.get('amount') as string;
   const category = formData.get('category') as string;
   const type = formData.get('type') as 'income' | 'expense';
+  const creditCardId = formData.get('creditCardId') as string | null;
 
   if (!description || !amount || !category) {
     return { error: 'Preencha todos os campos.' };
+  }
+
+  let txDate = new Date();
+
+  if (creditCardId) {
+    const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, creditCardId));
+    if (cardRes.length > 0) {
+      const card = cardRes[0];
+      txDate = calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
+    }
   }
 
   await db.insert(transactions).values({
@@ -25,7 +55,9 @@ export async function createTransaction(formData: FormData) {
     amount: amount,
     description: description,
     category: category,
-    type: type
+    type: type,
+    creditCardId: creditCardId || null,
+    createdAt: txDate
   });
 
   revalidatePath('/');
@@ -111,6 +143,7 @@ export async function createInstallmentPurchase(formData: FormData) {
   const category = formData.get('category') as string;
   const installmentsCount = parseInt(formData.get('installmentsCount') as string);
   const currentInstallment = parseInt(formData.get('currentInstallment') as string);
+  const creditCardId = formData.get('creditCardId') as string | null;
 
   if (!description || isNaN(installmentAmount) || !category || isNaN(installmentsCount) || isNaN(currentInstallment)) {
     return { error: 'Preencha todos os campos corretamente.' };
@@ -129,15 +162,34 @@ export async function createInstallmentPurchase(formData: FormData) {
     category,
     totalAmount: totalAmount.toString(),
     installmentsCount: installmentsCount.toString(),
+    creditCardId: creditCardId || null,
   }).returning({ id: installments.id });
+
+  let cardClosingDay = 0;
+  let cardDueDay = 0;
+
+  if (creditCardId) {
+    const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, creditCardId));
+    if (cardRes.length > 0) {
+      cardClosingDay = Number(cardRes[0].closingDay);
+      cardDueDay = Number(cardRes[0].dueDay);
+    }
+  }
 
   // Generate transactions for the remaining installments
   const txValues = [];
   const now = new Date();
   
   for (let i = currentInstallment; i <= installmentsCount; i++) {
-    const txDate = new Date(now);
-    txDate.setMonth(now.getMonth() + (i - currentInstallment));
+    // Calculo basico de meses a frente
+    const baseDate = new Date(now);
+    baseDate.setMonth(now.getMonth() + (i - currentInstallment));
+    
+    // Se tiver cartao de credito, aplica a logica de vencimento
+    let txDate = baseDate;
+    if (cardClosingDay > 0 && cardDueDay > 0) {
+      txDate = calculateCreditCardDate(baseDate, cardClosingDay, cardDueDay);
+    }
     
     txValues.push({
       userId: session.user.id,
@@ -146,6 +198,7 @@ export async function createInstallmentPurchase(formData: FormData) {
       category: category,
       type: 'expense' as const,
       installmentId: installment.id,
+      creditCardId: creditCardId || null,
       createdAt: txDate,
     });
   }
