@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getSession } from '@/lib/auth';
-import { LayoutDashboard, BarChart3, Tags, Sparkles, CreditCard } from 'lucide-react';
+import { LayoutDashboard, Tags, Sparkles, CreditCard, Wallet, BarChart2 } from 'lucide-react';
 
 export async function TopNav() {
   const session = await getSession();
@@ -21,8 +21,13 @@ export async function TopNav() {
         </Link>
         
         <Link href="/analytics" className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-brand transition-colors px-3 py-2 rounded-lg hover:bg-brand/10">
-          <BarChart3 size={18} />
+          <BarChart2 size={18} />
           <span className="hidden sm:block">Análises</span>
+        </Link>
+        
+        <Link href="/transactions" className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-brand transition-colors px-3 py-2 rounded-lg hover:bg-brand/10">
+          <Wallet size={18} />
+          <span className="hidden sm:block">Transações</span>
         </Link>
         
         <Link href="/categories" className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-brand transition-colors px-3 py-2 rounded-lg hover:bg-brand/10">
