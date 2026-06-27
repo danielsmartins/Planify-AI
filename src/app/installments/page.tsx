@@ -4,7 +4,6 @@ import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { eq, sql, desc, and } from 'drizzle-orm';
 import { InstallmentClient } from '@/components/installments/InstallmentClient';
-import { TopNav } from '@/components/layout/TopNav';
 
 export default async function InstallmentsPage() {
   const session = await getSession();
@@ -58,7 +57,6 @@ export default async function InstallmentsPage() {
 
   return (
     <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-12 max-w-7xl mx-auto">
-      <TopNav />
       
       <div className="mb-10">
         <h1 className="text-3xl font-extrabold tracking-tight mb-2">

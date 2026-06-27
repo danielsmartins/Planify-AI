@@ -3,7 +3,6 @@ import { creditCards } from '@/db/schema';
 import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { eq } from 'drizzle-orm';
-import { TopNav } from '@/components/layout/TopNav';
 import { CardClient } from '@/components/cards/CardClient';
 
 export default async function CardsPage() {
@@ -16,7 +15,6 @@ export default async function CardsPage() {
 
   return (
     <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-12 max-w-7xl mx-auto">
-      <TopNav />
       
       <div className="mb-8">
         <h1 className="text-3xl font-extrabold tracking-tight mb-2">
