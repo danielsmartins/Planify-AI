@@ -4,7 +4,14 @@ import { useTransition } from 'react';
 import { addCategory, deleteCategory } from '@/app/categories/actions';
 import { Trash2, Plus, Target } from 'lucide-react';
 
-export function CategoryClient({ categories }: { categories: any[] }) {
+interface CategoryProps {
+  id: string;
+  name: string;
+  color: string;
+  monthlyLimit: string;
+}
+
+export function CategoryClient({ categories }: { categories: CategoryProps[] }) {
   const [isPending, startTransition] = useTransition();
 
   const handleAdd = (formData: FormData) => {

@@ -4,7 +4,12 @@ import { Plus, Receipt, X, Sparkles } from 'lucide-react';
 import { createTransaction, addTransactionViaAI } from '@/app/actions';
 import Link from 'next/link';
 
-export function ActionButtons({ categories }: { categories: any[] }) {
+interface CategoryProps {
+  id: string;
+  name: string;
+}
+
+export function ActionButtons({ categories }: { categories: CategoryProps[] }) {
   const [isOpen, setIsOpen] = useState(false);
   const [type, setType] = useState<'income' | 'expense' | 'ai'>('expense');
   const [loading, setLoading] = useState(false);

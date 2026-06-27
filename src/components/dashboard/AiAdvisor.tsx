@@ -19,8 +19,8 @@ export function AiAdvisor() {
       if (!res.ok) throw new Error(data.error || 'Erro ao gerar insight');
       
       setInsight(data.insight);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
@@ -42,7 +42,7 @@ export function AiAdvisor() {
         {insight ? (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
             <p className="text-sm text-slate-300 leading-relaxed bg-slate-800/40 p-4 rounded-xl border border-purple-500/10">
-              "{insight}"
+              &quot;{insight}&quot;
             </p>
             <button 
               onClick={generateInsight}
