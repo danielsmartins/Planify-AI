@@ -20,7 +20,7 @@ export function MonthlyChart({ data }: { data: MonthlyData[] }) {
   const formatBRL = (value: number) => `R$ ${value.toFixed(2).replace('.', ',')}`;
 
   return (
-    <div className="glass-panel p-6 rounded-2xl h-[400px] w-full mt-6">
+    <div className="glass-panel p-6 rounded-2xl h-[400px] w-full">
       <h3 className="text-lg font-bold mb-6">Entradas vs Saídas (Últimos 12 meses)</h3>
       <ResponsiveContainer width="100%" height="85%">
         <BarChart
