@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/db';
-import { transactions } from '@/db/schema';
+import { transactions, installments } from '@/db/schema';
 import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { eq, and } from 'drizzle-orm';
@@ -99,5 +99,62 @@ export async function updateTransaction(id: string, formData: FormData) {
   );
 
   revalidatePath('/');
+  return { success: true };
+}
+
+export async function createInstallmentPurchase(formData: FormData) {
+  const session = await getSession();
+  if (!session) return { error: 'Not authenticated' };
+
+  const description = formData.get('description') as string;
+  const installmentAmount = parseFloat(formData.get('amount') as string);
+  const category = formData.get('category') as string;
+  const installmentsCount = parseInt(formData.get('installmentsCount') as string);
+  const currentInstallment = parseInt(formData.get('currentInstallment') as string);
+
+  if (!description || isNaN(installmentAmount) || !category || isNaN(installmentsCount) || isNaN(currentInstallment)) {
+    return { error: 'Preencha todos os campos corretamente.' };
+  }
+
+  if (currentInstallment > installmentsCount) {
+    return { error: 'A parcela atual não pode ser maior que o total de parcelas.' };
+  }
+
+  const totalAmount = installmentAmount * installmentsCount;
+
+  // Insert master installment record
+  const [installment] = await db.insert(installments).values({
+    userId: session.user.id,
+    description,
+    category,
+    totalAmount: totalAmount.toString(),
+    installmentsCount: installmentsCount.toString(),
+  }).returning({ id: installments.id });
+
+  // Generate transactions for the remaining installments
+  const txValues = [];
+  const now = new Date();
+  
+  for (let i = currentInstallment; i <= installmentsCount; i++) {
+    const txDate = new Date(now);
+    txDate.setMonth(now.getMonth() + (i - currentInstallment));
+    
+    txValues.push({
+      userId: session.user.id,
+      amount: installmentAmount.toString(),
+      description: `${description} (${i}/${installmentsCount})`,
+      category: category,
+      type: 'expense' as const,
+      installmentId: installment.id,
+      createdAt: txDate,
+    });
+  }
+
+  if (txValues.length > 0) {
+    await db.insert(transactions).values(txValues);
+  }
+
+  revalidatePath('/');
+  revalidatePath('/installments');
   return { success: true };
 }

@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { Plus, Receipt, X, Sparkles } from 'lucide-react';
-import { createTransaction, addTransactionViaAI } from '@/app/actions';
+import { createTransaction, addTransactionViaAI, createInstallmentPurchase } from '@/app/actions';
 import Link from 'next/link';
 
 interface CategoryProps {
@@ -14,6 +14,15 @@ export function ActionButtons({ categories }: { categories: CategoryProps[] }) {
   const [type, setType] = useState<'income' | 'expense' | 'ai'>('expense');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  
+  // Installment state
+  const [isInstallment, setIsInstallment] = useState(false);
+
+  const resetState = () => {
+    setIsOpen(false);
+    setErrorMsg('');
+    setIsInstallment(false);
+  };
 
   async function handleAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -30,12 +39,27 @@ export function ActionButtons({ categories }: { categories: CategoryProps[] }) {
         return;
       }
     } else {
-      formData.append('type', type);
-      await createTransaction(formData);
+      if (type === 'expense' && isInstallment) {
+        // Nova action para compras parceladas
+        const res = await createInstallmentPurchase(formData);
+        if (res?.error) {
+          setErrorMsg(res.error);
+          setLoading(false);
+          return;
+        }
+      } else {
+        formData.append('type', type);
+        const res = await createTransaction(formData);
+        if (res?.error) {
+          setErrorMsg(res.error);
+          setLoading(false);
+          return;
+        }
+      }
     }
     
     setLoading(false);
-    setIsOpen(false);
+    resetState();
   }
 
   return (
@@ -57,8 +81,8 @@ export function ActionButtons({ categories }: { categories: CategoryProps[] }) {
 
       {isOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="glass-panel p-6 rounded-2xl w-full max-w-md relative animate-in fade-in zoom-in duration-200">
-            <button onClick={() => setIsOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"><X size={20}/></button>
+          <div className="glass-panel p-6 rounded-2xl w-full max-w-md relative animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
+            <button onClick={resetState} className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"><X size={20}/></button>
             <h2 className="text-xl font-bold mb-6">
               {type === 'income' ? 'Adicionar Receita' : type === 'expense' ? 'Adicionar Despesa' : 'Inteligência Artificial ✨'}
             </h2>
@@ -84,16 +108,20 @@ export function ActionButtons({ categories }: { categories: CategoryProps[] }) {
                 <>
                   <div>
                     <label className="block text-sm text-slate-300 mb-1">Descrição</label>
-                    <input required name="description" type="text" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder="Ex: Salário" />
+                    <input required name="description" type="text" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder={isInstallment ? "Ex: iPhone 15" : "Ex: Salário"} />
                   </div>
+                  
                   <div>
-                    <label className="block text-sm text-slate-300 mb-1">Valor (R$)</label>
+                    <label className="block text-sm text-slate-300 mb-1">
+                      {isInstallment ? "Valor da Parcela (R$)" : "Valor (R$)"}
+                    </label>
                     <input required name="amount" type="number" step="0.01" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder="0.00" />
                   </div>
+                  
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-sm text-slate-300">Categoria</label>
-                      <Link href="/categories" className="text-xs text-brand hover:underline">Criar nova</Link>
+                      <Link href="/categories" className="text-xs text-brand hover:underline" onClick={resetState}>Criar nova</Link>
                     </div>
                     {categories.length > 0 ? (
                       <select required name="category" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors">
@@ -105,6 +133,35 @@ export function ActionButtons({ categories }: { categories: CategoryProps[] }) {
                       <input required name="category" type="text" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder="Ex: Serviços" />
                     )}
                   </div>
+
+                  {type === 'expense' && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <input 
+                        type="checkbox" 
+                        id="installment-toggle" 
+                        checked={isInstallment}
+                        onChange={(e) => setIsInstallment(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-600 bg-slate-900 focus:ring-brand accent-brand cursor-pointer"
+                      />
+                      <label htmlFor="installment-toggle" className="text-sm text-slate-300 cursor-pointer select-none">
+                        É uma compra parcelada?
+                      </label>
+                    </div>
+                  )}
+
+                  {isInstallment && type === 'expense' && (
+                    <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <div>
+                        <label className="block text-sm text-slate-300 mb-1">Qtd. de Parcelas</label>
+                        <input required min="2" max="360" name="installmentsCount" type="number" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder="Ex: 12" />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-slate-300 mb-1" title="Em qual parcela você está agora?">Parcela Atual</label>
+                        <input required min="1" max="360" name="currentInstallment" type="number" defaultValue="1" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" />
+                      </div>
+                    </div>
+                  )}
+
                   <button disabled={loading} type="submit" className="w-full bg-brand hover:bg-brand-dark text-white font-medium py-3 rounded-xl mt-4 cursor-pointer disabled:opacity-50">
                     {loading ? 'Salvando...' : 'Salvar Transação'}
                   </button>

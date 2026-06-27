@@ -8,6 +8,9 @@ export interface ExtractedData {
   description: string;
   category: string;
   type: 'income' | 'expense';
+  isInstallment?: boolean;
+  installmentsCount?: number;
+  currentInstallment?: number;
 }
 
 export async function extractFinancialData(text: string, existingCategories: string[] = []): Promise<ExtractedData | null> {
@@ -16,17 +19,19 @@ export async function extractFinancialData(text: string, existingCategories: str
 
     const prompt = `
 Você é um assistente financeiro inteligente.
-O usuário enviou a seguinte mensagem no WhatsApp: "${text}"
+O usuário enviou a seguinte mensagem no WhatsApp/Telegram: "${text}"
 
 Sua tarefa é extrair os seguintes dados financeiros dessa mensagem e retorná-los EXATAMENTE como um JSON, sem formatação markdown ou texto adicional.
 
 Formato esperado:
 {
-  "amount": número (valor em float, ex: 25.50),
+  "amount": número (valor em float da parcela, ex: 25.50. Se o usuário falar "Comprei algo de 1000 reais em 10 vezes", o valor da parcela é 100),
   "description": string (descrição curta do que foi gasto/ganho),
   "category": string (uma palavra que classifique. ex: Alimentação, Transporte, Saúde, Salário, Compras, etc),
-  "type": string ("income" se for entrada de dinheiro/ganho, ou "expense" se for um gasto/despesa)
-}
+  "type": string ("income" se for entrada de dinheiro/ganho, ou "expense" se for um gasto/despesa),
+  "isInstallment": boolean (true se a pessoa mencionar que foi parcelado, crédito, em x vezes, etc. Falso caso contrário),
+  "installmentsCount": number (se isInstallment for true, qual o total de parcelas? Ex: se comprou em 10x, retorne 10. Se não for parcelado, omita ou retorne null),
+  "currentInstallment": number (se isInstallment for true, em qual parcela a pessoa está? Se ela não falar, assuma 1. Se ela falar "já paguei 2", então ela está indo pagar a 3, retorne 3. Se não for parcelado, omita ou retorne null)
 }
 
 Categorias existentes do usuário: ${existingCategories.length > 0 ? existingCategories.join(', ') : 'Nenhuma categoria cadastrada'}.
@@ -34,7 +39,8 @@ Categorias existentes do usuário: ${existingCategories.length > 0 ? existingCat
 Regras:
 1. Tente classificar a despesa/ganho em uma das categorias existentes. SE NÃO SE ENCAIXAR em nenhuma, crie UMA NOVA CATEGORIA que seja concisa e faça sentido (ex: Saúde, Educação, Casa).
 2. Se a mensagem não parecer uma transação financeira, retorne null.
-3. Apenas retorne o JSON puro e válido. Não coloque crases (\`\`\`).
+3. Se for parcelado, MAS o usuário der APENAS o valor TOTAL, divida o valor total pelas parcelas para preencher o "amount". Ex: "TV de 2000 em 10x" -> amount = 200, isInstallment = true, installmentsCount = 10. Se ele falar "uma tv em 10 parcelas de 200", o amount já é 200.
+4. Apenas retorne o JSON puro e válido. Não coloque crases (\`\`\`).
 `;
 
     const result = await model.generateContent(prompt);
