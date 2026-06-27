@@ -43,7 +43,7 @@ export function MonthlyChart({ data }: { data: MonthlyData[] }) {
             axisLine={false}
           />
           <Tooltip 
-            formatter={(value: number) => formatBRL(value)}
+            formatter={(value) => formatBRL(Number(value))}
             contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc' }}
           />
           <Legend wrapperStyle={{ paddingTop: '20px' }} />
