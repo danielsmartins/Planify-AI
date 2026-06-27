@@ -8,28 +8,31 @@ export async function TopNav() {
   if (!session) return null;
 
   return (
-    <nav className="fixed top-0 left-0 right-0 h-16 bg-slate-950/80 backdrop-blur-md border-b border-slate-800/50 z-40 flex items-center justify-between px-6 lg:px-12 transition-all">
+    <nav className="glass-panel mb-8 p-4 rounded-2xl flex items-center justify-between">
       <div className="flex items-center gap-2">
-        <Sparkles className="text-brand w-5 h-5" />
-        <span className="font-bold text-lg tracking-tight">Planify AI</span>
+        <Sparkles className="text-brand" size={24} />
+        <span className="font-bold text-xl tracking-tight hidden sm:block">Planify AI</span>
       </div>
+      
+      <div className="flex items-center gap-2 sm:gap-6">
+        <Link href="/" className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-brand transition-colors px-3 py-2 rounded-lg hover:bg-brand/10">
+          <LayoutDashboard size={18} />
+          <span className="hidden sm:block">Dashboard</span>
+        </Link>
+        
+        <Link href="/analytics" className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-brand transition-colors px-3 py-2 rounded-lg hover:bg-brand/10">
+          <BarChart3 size={18} />
+          <span className="hidden sm:block">Análises</span>
+        </Link>
+        
+        <Link href="/categories" className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-brand transition-colors px-3 py-2 rounded-lg hover:bg-brand/10">
+          <Tags size={18} />
+          <span className="hidden sm:block">Categorias</span>
+        </Link>
 
-      <div className="flex items-center gap-1 sm:gap-2">
-        <Link href="/" className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white px-3 py-2 rounded-lg hover:bg-slate-800/50 transition-colors">
-          <LayoutDashboard size={16} />
-          <span className="hidden sm:inline">Dashboard</span>
-        </Link>
-        <Link href="/analytics" className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white px-3 py-2 rounded-lg hover:bg-slate-800/50 transition-colors">
-          <BarChart3 size={16} />
-          <span className="hidden sm:inline">Análises</span>
-        </Link>
-        <Link href="/categories" className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white px-3 py-2 rounded-lg hover:bg-slate-800/50 transition-colors">
-          <Tags size={16} />
-          <span className="hidden sm:inline">Categorias</span>
-        </Link>
-        <Link href="/installments" className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white px-3 py-2 rounded-lg hover:bg-slate-800/50 transition-colors">
-          <CreditCard size={16} />
-          <span className="hidden sm:inline">Parcelamentos</span>
+        <Link href="/installments" className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-brand transition-colors px-3 py-2 rounded-lg hover:bg-brand/10">
+          <CreditCard size={18} />
+          <span className="hidden sm:block">Parcelamentos</span>
         </Link>
       </div>
     </nav>
