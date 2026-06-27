@@ -15,8 +15,9 @@ export async function addCreditCard(formData: FormData) {
   const closingDay = formData.get('closingDay') as string;
   const dueDay = formData.get('dueDay') as string;
   const limitAmount = formData.get('limitAmount') as string;
+  const brand = formData.get('brand') as string;
 
-  if (!name || !color || !closingDay || !dueDay) throw new Error('Invalid data');
+  if (!name || !color || !closingDay || !dueDay || !brand) throw new Error('Invalid data');
 
   await db.insert(creditCards).values({
     userId: session.user.id,
@@ -25,6 +26,7 @@ export async function addCreditCard(formData: FormData) {
     closingDay,
     dueDay,
     limitAmount: limitAmount ? parseFloat(limitAmount).toString() : '0',
+    brand,
   });
 
   revalidatePath('/cards');
@@ -70,8 +72,9 @@ export async function updateCreditCard(id: string, formData: FormData) {
   const closingDay = formData.get('closingDay') as string;
   const dueDay = formData.get('dueDay') as string;
   const limitAmount = formData.get('limitAmount') as string;
+  const brand = formData.get('brand') as string;
 
-  if (!name || !color || !closingDay || !dueDay) throw new Error('Invalid data');
+  if (!name || !color || !closingDay || !dueDay || !brand) throw new Error('Invalid data');
 
   await db.update(creditCards).set({
     name,
@@ -79,6 +82,7 @@ export async function updateCreditCard(id: string, formData: FormData) {
     closingDay,
     dueDay,
     limitAmount: limitAmount ? parseFloat(limitAmount).toString() : '0',
+    brand,
   }).where(
     and(
       eq(creditCards.id, id),
@@ -86,9 +90,6 @@ export async function updateCreditCard(id: string, formData: FormData) {
     )
   );
 
-  // Idealmente as futuras transacoes de crédito atreladas teriam a data recalculada
-  // Mas para simplificar, a atualização só afetará os próximos cadastros.
-  
   revalidatePath('/cards');
   return { success: true };
 }

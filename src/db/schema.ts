@@ -60,6 +60,7 @@ export const creditCards = pgTable('credit_cards', {
   closingDay: numeric('closing_day').notNull(),
   dueDay: numeric('due_day').notNull(),
   limitAmount: numeric('limit_amount').default('0'),
+  brand: text('brand').default('mastercard').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

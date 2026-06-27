@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { deleteCreditCard, updateCreditCard, addCreditCard } from '@/app/cards/actions';
-import { CreditCard, Trash2, Edit2, Plus, Calendar, Settings, X } from 'lucide-react';
+import { CreditCard, Trash2, Edit2, Plus, Calendar, X } from 'lucide-react';
 
 interface CardProps {
   id: string;
@@ -11,6 +11,7 @@ interface CardProps {
   closingDay: string;
   dueDay: string;
   limitAmount: string | null;
+  brand: string;
 }
 
 export function CardClient({ cards }: { cards: CardProps[] }) {
@@ -20,21 +21,23 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
 
   const [formName, setFormName] = useState('');
   const [formColor, setFormColor] = useState('#8b5cf6');
+  const [formBrand, setFormBrand] = useState('mastercard');
 
   const CARD_TEMPLATES = [
-    { name: 'Nubank', color: '#8A05BE' },
-    { name: 'Itaú', color: '#EC7000' },
-    { name: 'Inter', color: '#FF7A00' },
-    { name: 'C6 Bank', color: '#242424' },
-    { name: 'Santander', color: '#CC0000' },
-    { name: 'Bradesco', color: '#CC092F' },
-    { name: 'Banco do Brasil', color: '#F8D117' },
-    { name: 'Caixa', color: '#005CA9' },
+    { name: 'Nubank', color: '#8A05BE', brand: 'mastercard' },
+    { name: 'Itaú', color: '#EC7000', brand: 'mastercard' },
+    { name: 'Inter', color: '#FF7A00', brand: 'mastercard' },
+    { name: 'C6 Bank', color: '#242424', brand: 'mastercard' },
+    { name: 'Santander', color: '#CC0000', brand: 'visa' },
+    { name: 'Bradesco', color: '#CC092F', brand: 'visa' },
+    { name: 'Banco do Brasil', color: '#F8D117', brand: 'visa' },
+    { name: 'Caixa', color: '#005CA9', brand: 'elo' },
   ];
 
   const handleTemplateClick = (template: typeof CARD_TEMPLATES[0]) => {
     setFormName(template.name);
     setFormColor(template.color);
+    setFormBrand(template.brand);
   };
 
   const formatBRL = (val: string | number) => {
@@ -112,6 +115,7 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
                       setEditingCard(card);
                       setFormName(card.name);
                       setFormColor(card.color);
+                      setFormBrand(card.brand || 'mastercard');
                     }}
                     className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors backdrop-blur-md"
                   >
@@ -159,10 +163,17 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
                   )}
                 </div>
                 
-                {/* Decoration Circles (Mastercard style indicator) */}
-                <div className="flex">
-                  <div className="w-6 h-6 rounded-full bg-white/40 -mr-2"></div>
-                  <div className="w-6 h-6 rounded-full bg-white/20 backdrop-blur-md"></div>
+                {/* Brand Logo Text */}
+                <div className="text-white/70 font-bold italic tracking-wider text-xl uppercase opacity-80" style={{ fontFamily: 'sans-serif' }}>
+                  {card.brand === 'mastercard' && (
+                    <div className="flex">
+                      <div className="w-6 h-6 rounded-full bg-white/40 -mr-2"></div>
+                      <div className="w-6 h-6 rounded-full bg-white/20 backdrop-blur-md"></div>
+                    </div>
+                  )}
+                  {card.brand === 'visa' && <span>VISA</span>}
+                  {card.brand === 'elo' && <span>elo</span>}
+                  {card.brand === 'amex' && <span className="text-sm border border-white/50 px-1 rounded-sm">AMEX</span>}
                 </div>
               </div>
             </div>
@@ -175,7 +186,7 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md relative animate-in fade-in zoom-in duration-200">
             <button 
-              onClick={() => { setIsAdding(false); setEditingCard(null); setFormName(''); setFormColor('#8b5cf6'); }} 
+              onClick={() => { setIsAdding(false); setEditingCard(null); setFormName(''); setFormColor('#8b5cf6'); setFormBrand('mastercard'); }} 
               className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
             >
               <X size={20}/>
@@ -225,6 +236,21 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
                     className="w-14 h-10 bg-slate-900/50 border border-slate-700/50 rounded-xl px-1 py-1 cursor-pointer focus:border-brand focus:outline-none transition-colors"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Bandeira do Cartão</label>
+                <select 
+                  name="brand" 
+                  value={formBrand}
+                  onChange={(e) => setFormBrand(e.target.value)}
+                  className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-3 py-2 text-sm text-slate-100 focus:border-brand focus:outline-none transition-colors"
+                >
+                  <option value="mastercard">Mastercard</option>
+                  <option value="visa">Visa</option>
+                  <option value="elo">Elo</option>
+                  <option value="amex">American Express</option>
+                </select>
               </div>
               
               <div className="grid grid-cols-2 gap-4">
