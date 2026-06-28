@@ -16,9 +16,9 @@ export function BudgetPieChart({ data }: { data: CategoryData[] }) {
   const formatBRL = (value: number) => `R$ ${value.toFixed(2).replace('.', ',')}`;
 
   return (
-    <div className="glass-panel p-6 rounded-2xl h-[350px] w-full max-w-lg mx-auto mt-8">
-      <h3 className="text-lg font-bold mb-4 text-center">Distribuição do Planejamento</h3>
-      <ResponsiveContainer width="100%" height="80%">
+    <div className="glass-panel p-6 rounded-2xl h-[320px] w-full flex flex-col">
+      <h3 className="text-lg font-bold mb-2 text-center">Distribuição do Planejamento</h3>
+      <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
             data={data}

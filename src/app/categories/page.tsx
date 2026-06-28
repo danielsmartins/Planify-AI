@@ -4,7 +4,6 @@ import { db } from '@/db';
 import { categories } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { CategoryClient } from '@/components/categories/CategoryClient';
-import { BudgetPieChart } from '@/components/categories/BudgetPieChart';
 
 export default async function CategoriesPage() {
   const session = await getSession();
@@ -38,9 +37,7 @@ export default async function CategoriesPage() {
         </p>
       </header>
 
-      <CategoryClient categories={userCategories} />
-      
-      <BudgetPieChart data={budgetData} />
+      <CategoryClient categories={userCategories} budgetData={budgetData} />
     </div>
   );
 }

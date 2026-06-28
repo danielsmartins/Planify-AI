@@ -4,7 +4,7 @@ import { Wallet, TrendingUp, TrendingDown, LogOut, Send } from 'lucide-react';
 import { getSession, logout } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { db } from '@/db';
-import { transactions, categories, creditCards } from '@/db/schema';
+import { transactions, categories, creditCards, accounts } from '@/db/schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { ActionButtons } from '@/components/dashboard/ActionButtons';
 import { ExpensesChart } from '@/components/dashboard/ExpensesChart';
@@ -61,6 +61,7 @@ export default async function Home() {
   // Buscar categorias do usuário para usar as cores reais
   const userCategories = await db.select().from(categories).where(eq(categories.userId, session.user.id));
   const userCards = await db.select().from(creditCards).where(eq(creditCards.userId, session.user.id));
+  const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, session.user.id));
   
   const categoryColorMap: Record<string, string> = {};
   userCategories.forEach(c => {
@@ -110,7 +111,7 @@ export default async function Home() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 lg:justify-end shrink-0">
-          <ActionButtons categories={userCategories} creditCards={userCards} />
+          <ActionButtons categories={userCategories} creditCards={userCards} accounts={userAccounts} />
         </div>
       </header>
 

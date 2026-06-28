@@ -23,6 +23,7 @@ export const transactions = pgTable('transactions', {
   status: text('status', { enum: ['pending', 'confirmed'] }).default('confirmed').notNull(),
   installmentId: uuid('installment_id'),
   creditCardId: uuid('credit_card_id'),
+  accountId: uuid('account_id'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -66,3 +67,16 @@ export const creditCards = pgTable('credit_cards', {
 
 export type CreditCard = typeof creditCards.$inferSelect;
 export type NewCreditCard = typeof creditCards.$inferInsert;
+
+export const accounts = pgTable('accounts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id).notNull(),
+  name: text('name').notNull(),
+  type: text('type', { enum: ['checking', 'savings', 'investment', 'cash'] }).default('checking').notNull(),
+  color: text('color').notNull(),
+  balance: numeric('balance').default('0').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export type Account = typeof accounts.$inferSelect;
+export type NewAccount = typeof accounts.$inferInsert;

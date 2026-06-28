@@ -15,7 +15,12 @@ interface CreditCardProps {
   color: string;
 }
 
-export function ActionButtons({ categories, creditCards = [] }: { categories: CategoryProps[], creditCards?: CreditCardProps[] }) {
+interface AccountProps {
+  id: string;
+  name: string;
+}
+
+export function ActionButtons({ categories, creditCards = [], accounts = [] }: { categories: CategoryProps[], creditCards?: CreditCardProps[], accounts?: AccountProps[] }) {
   const [isOpen, setIsOpen] = useState(false);
   const [type, setType] = useState<'income' | 'expense' | 'ai'>('expense');
   const [loading, setLoading] = useState(false);
@@ -147,11 +152,27 @@ export function ActionButtons({ categories, creditCards = [] }: { categories: Ca
                         <Link href="/cards" className="text-xs text-brand hover:underline" onClick={resetState}>Gerenciar</Link>
                       </div>
                       <select name="creditCardId" defaultValue="" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors">
-                        <option value="">Nenhum (Débito/Dinheiro)</option>
+                        <option value="">Nenhum (Usar Saldo da Conta)</option>
                         {creditCards.map(c => (
                           <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                       </select>
+                    </div>
+                  )}
+
+                  {accounts.length > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-sm text-slate-300">Conta / Carteira</label>
+                        <Link href="/accounts" className="text-xs text-brand hover:underline" onClick={resetState}>Gerenciar</Link>
+                      </div>
+                      <select name="accountId" defaultValue="" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors">
+                        <option value="">Não vincular (Geral)</option>
+                        {accounts.map(a => (
+                          <option key={a.id} value={a.id}>{a.name}</option>
+                        ))}
+                      </select>
+                      <p className="text-[10px] text-slate-400 mt-1">Se escolher um Cartão de Crédito acima, a conta não será debitada agora.</p>
                     </div>
                   )}
 

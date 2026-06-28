@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { addCategory, deleteCategory, updateCategory } from '@/app/categories/actions';
 import { Trash2, Plus, Target, Edit2, X } from 'lucide-react';
+import { BudgetPieChart } from '@/components/categories/BudgetPieChart';
 
 interface CategoryProps {
   id: string;
@@ -11,7 +12,13 @@ interface CategoryProps {
   monthlyLimit: string;
 }
 
-export function CategoryClient({ categories }: { categories: CategoryProps[] }) {
+interface CategoryData {
+  name: string;
+  value: number;
+  color: string;
+}
+
+export function CategoryClient({ categories, budgetData }: { categories: CategoryProps[], budgetData: CategoryData[] }) {
   const [isPending, startTransition] = useTransition();
   const [editingCategory, setEditingCategory] = useState<CategoryProps | null>(null);
 
@@ -96,8 +103,9 @@ export function CategoryClient({ categories }: { categories: CategoryProps[] }) 
           )}
         </div>
 
-        <div className="glass-panel p-6 rounded-2xl h-max">
-          <h3 className="text-lg font-bold mb-4">Adicionar Nova</h3>
+        <div className="flex flex-col gap-8">
+          <div className="glass-panel p-6 rounded-2xl h-max">
+            <h3 className="text-lg font-bold mb-4">Adicionar Nova</h3>
           
           <form action={handleAdd} className="flex flex-col gap-4">
             <div>
@@ -144,6 +152,13 @@ export function CategoryClient({ categories }: { categories: CategoryProps[] }) 
               {isPending ? 'Salvando...' : 'Criar Categoria'}
             </button>
           </form>
+          </div>
+
+          {budgetData && budgetData.length > 0 && (
+            <div className="animate-in fade-in zoom-in duration-500">
+              <BudgetPieChart data={budgetData} />
+            </div>
+          )}
         </div>
       </div>
 

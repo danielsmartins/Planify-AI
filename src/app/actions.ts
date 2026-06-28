@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/db';
-import { transactions, installments, creditCards } from '@/db/schema';
+import { transactions, installments, creditCards, accounts } from '@/db/schema';
 import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { eq, and } from 'drizzle-orm';
@@ -35,18 +35,32 @@ export async function createTransaction(formData: FormData) {
   const category = formData.get('category') as string;
   const type = formData.get('type') as 'income' | 'expense';
   const creditCardId = formData.get('creditCardId') as string | null;
+  const accountId = formData.get('accountId') as string | null;
 
   if (!description || !amount || !category) {
     return { error: 'Preencha todos os campos.' };
   }
 
   let txDate = new Date();
+  const parsedAmount = parseFloat(amount);
 
   if (creditCardId) {
     const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, creditCardId));
     if (cardRes.length > 0) {
       const card = cardRes[0];
       txDate = calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
+    }
+  } else if (accountId) {
+    // Atualizar saldo da conta se não for cartão de crédito
+    const accRes = await db.select().from(accounts).where(and(eq(accounts.id, accountId), eq(accounts.userId, session.user.id)));
+    if (accRes.length > 0) {
+      const acc = accRes[0];
+      const currentBalance = parseFloat(acc.balance);
+      const newBalance = type === 'income' ? currentBalance + parsedAmount : currentBalance - parsedAmount;
+      
+      await db.update(accounts)
+        .set({ balance: newBalance.toString() })
+        .where(eq(accounts.id, acc.id));
     }
   }
 
@@ -57,6 +71,7 @@ export async function createTransaction(formData: FormData) {
     category: category,
     type: type,
     creditCardId: creditCardId || null,
+    accountId: (!creditCardId && accountId) ? accountId : null,
     createdAt: txDate
   });
 
@@ -96,12 +111,32 @@ export async function deleteTransaction(id: string) {
   const session = await getSession();
   if (!session) return { error: 'Not authenticated' };
 
-  await db.delete(transactions).where(
-    and(
-      eq(transactions.id, id),
-      eq(transactions.userId, session.user.id)
-    )
-  );
+  const txRes = await db.select().from(transactions).where(and(eq(transactions.id, id), eq(transactions.userId, session.user.id)));
+  
+  if (txRes.length > 0) {
+    const tx = txRes[0];
+    
+    // Se tinha uma conta atrelada, desfazer a operação no saldo
+    if (tx.accountId) {
+      const accRes = await db.select().from(accounts).where(eq(accounts.id, tx.accountId));
+      if (accRes.length > 0) {
+        const acc = accRes[0];
+        const currentBalance = parseFloat(acc.balance);
+        const parsedAmount = parseFloat(tx.amount);
+        // Desfazer: se era despesa, soma de volta. Se era receita, subtrai de volta.
+        const newBalance = tx.type === 'expense' ? currentBalance + parsedAmount : currentBalance - parsedAmount;
+        
+        await db.update(accounts).set({ balance: newBalance.toString() }).where(eq(accounts.id, tx.accountId));
+      }
+    }
+
+    await db.delete(transactions).where(
+      and(
+        eq(transactions.id, id),
+        eq(transactions.userId, session.user.id)
+      )
+    );
+  }
 
   revalidatePath('/');
   return { success: true };
