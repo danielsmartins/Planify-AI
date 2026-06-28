@@ -5,6 +5,7 @@ import { transactions, categories } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { MonthlyChart } from '@/components/analytics/MonthlyChart';
 import { CategoryPieChart } from '@/components/analytics/CategoryPieChart';
+import { CategoryLimitChart } from '@/components/analytics/CategoryLimitChart';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { Wallet, TrendingUp, TrendingDown } from 'lucide-react';
 
@@ -32,7 +33,12 @@ export default async function AnalyticsPage() {
   // Busca categorias
   const userCategories = await db.select().from(categories).where(eq(categories.userId, session.user.id));
   const categoryColorMap: Record<string, string> = {};
-  userCategories.forEach(c => { categoryColorMap[c.name] = c.color; });
+  const categoryLimitsMap: Record<string, number> = {};
+  
+  userCategories.forEach(c => { 
+    categoryColorMap[c.name] = c.color; 
+    categoryLimitsMap[c.name] = parseFloat(c.monthlyLimit || '0');
+  });
 
   // Agrupa transações por mês (MM/YYYY)
   const monthlyMap: Record<string, { income: number, expense: number, dateObj: Date }> = {};
@@ -40,6 +46,9 @@ export default async function AnalyticsPage() {
 
   let totalIncome = 0;
   let totalExpense = 0;
+
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const currentMonthCategoryTotals: Record<string, number> = {};
 
   userTxs.forEach(tx => {
     const d = new Date(tx.createdAt);
@@ -58,6 +67,11 @@ export default async function AnalyticsPage() {
       monthlyMap[monthKey].expense += val;
       totalExpense += val;
       categoryTotals[tx.category] = (categoryTotals[tx.category] || 0) + val;
+      
+      // Se for do mês atual, soma para o gráfico de limites
+      if (d >= startOfMonth && d <= endOfMonth) {
+        currentMonthCategoryTotals[tx.category] = (currentMonthCategoryTotals[tx.category] || 0) + val;
+      }
     }
   });
 
@@ -77,6 +91,18 @@ export default async function AnalyticsPage() {
       color: categoryColorMap[name] || '#64748b'
     }))
     .sort((a, b) => b.value - a.value);
+
+  // Prepara dados do gráfico de limites (apenas mês atual)
+  const limitsData = Object.entries(categoryLimitsMap).map(([name, limit]) => {
+    const spent = currentMonthCategoryTotals[name] || 0;
+    return {
+      name,
+      spent,
+      limit,
+      color: categoryColorMap[name] || '#64748b'
+    };
+  }).filter(d => d.limit > 0 || d.spent > 0)
+    .sort((a, b) => b.spent - a.spent);
 
   const formatBRL = (val: number) => `R$ ${val.toFixed(2).replace('.', ',')}`;
 
@@ -98,9 +124,13 @@ export default async function AnalyticsPage() {
         <StatCard title="Saldo Acumulado" amount={formatBRL(totalIncome - totalExpense)} icon={Wallet} isAccent />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <MonthlyChart data={sortedData} />
         <CategoryPieChart data={pieData} />
+      </div>
+
+      <div className="w-full">
+        <CategoryLimitChart data={limitsData} />
       </div>
     </div>
   );
