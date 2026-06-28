@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getSession } from '@/lib/auth';
-import { LayoutDashboard, Tags, Sparkles, CreditCard, Wallet, BarChart2, Landmark } from 'lucide-react';
+import { LayoutDashboard, Tags, Sparkles, CreditCard, Wallet, BarChart2, Landmark, RotateCcw } from 'lucide-react';
 
 export async function TopNav() {
   const session = await getSession();
@@ -23,6 +23,11 @@ export async function TopNav() {
         <Link href="/analytics" className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-brand transition-colors px-3 py-2 rounded-lg hover:bg-brand/10">
           <BarChart2 size={18} />
           <span className="hidden sm:block">Análises</span>
+        </Link>
+        
+        <Link href="/subscriptions" className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-brand transition-colors px-3 py-2 rounded-lg hover:bg-brand/10">
+          <RotateCcw size={18} />
+          <span className="hidden sm:block">Assinaturas</span>
         </Link>
         
         <Link href="/accounts" className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-brand transition-colors px-3 py-2 rounded-lg hover:bg-brand/10">

@@ -80,3 +80,21 @@ export const accounts = pgTable('accounts', {
 
 export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
+
+export const subscriptions = pgTable('subscriptions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id).notNull(),
+  name: text('name').notNull(),
+  amount: numeric('amount').notNull(),
+  category: text('category').notNull().default('Outros'),
+  billingCycle: text('billing_cycle', { enum: ['monthly', 'yearly'] }).default('monthly').notNull(),
+  nextBillingDate: timestamp('next_billing_date').notNull(),
+  accountId: uuid('account_id'),
+  creditCardId: uuid('credit_card_id'),
+  status: text('status', { enum: ['active', 'canceled'] }).default('active').notNull(),
+  color: text('color').default('#64748b').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type NewSubscription = typeof subscriptions.$inferInsert;
