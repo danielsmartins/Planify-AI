@@ -1,5 +1,5 @@
 import { db } from '@/db';
-import { installments, transactions } from '@/db/schema';
+import { installments, transactions, categories, creditCards } from '@/db/schema';
 import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { eq, sql, desc, and } from 'drizzle-orm';
@@ -55,6 +55,9 @@ export default async function InstallmentsPage() {
     };
   });
 
+  const userCategories = await db.select().from(categories).where(eq(categories.userId, session.user.id));
+  const userCards = await db.select().from(creditCards).where(eq(creditCards.userId, session.user.id));
+
   return (
     <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-12 max-w-7xl mx-auto">
       
@@ -67,7 +70,11 @@ export default async function InstallmentsPage() {
         </p>
       </div>
 
-      <InstallmentClient installments={installmentsData} />
+      <InstallmentClient 
+        installments={installmentsData} 
+        categories={userCategories} 
+        creditCards={userCards} 
+      />
     </div>
   );
 }

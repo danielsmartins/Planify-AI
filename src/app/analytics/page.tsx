@@ -2,7 +2,7 @@ import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { db } from '@/db';
 import { transactions, categories } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { MonthlyChart } from '@/components/analytics/MonthlyChart';
 import { CategoryPieChart } from '@/components/analytics/CategoryPieChart';
 import { StatCard } from '@/components/dashboard/StatCard';
@@ -15,13 +15,17 @@ export default async function AnalyticsPage() {
     redirect('/login');
   }
 
-  // Busca todas as transações confirmadas do usuário
+  const now = new Date();
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  // Busca todas as transações confirmadas do usuário (até o fim do mês atual)
   const userTxs = await db.select()
     .from(transactions)
     .where(
       and(
         eq(transactions.userId, session.user.id),
-        eq(transactions.status, 'confirmed')
+        eq(transactions.status, 'confirmed'),
+        sql`${transactions.createdAt} <= ${endOfMonth}`
       )
     );
 

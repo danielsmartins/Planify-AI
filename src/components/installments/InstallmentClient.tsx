@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from 'react';
 import { deleteInstallment, updateInstallment } from '@/app/installments/actions';
-import { Trash2, Edit2, CreditCard, DollarSign, X } from 'lucide-react';
+import { createInstallmentPurchase } from '@/app/actions';
+import { Trash2, Edit2, CreditCard, DollarSign, X, Plus } from 'lucide-react';
 
 interface InstallmentProps {
   id: string;
@@ -15,9 +16,19 @@ interface InstallmentProps {
   remainingAmount: string;
 }
 
-export function InstallmentClient({ installments }: { installments: InstallmentProps[] }) {
+export function InstallmentClient({ 
+  installments, 
+  categories, 
+  creditCards 
+}: { 
+  installments: InstallmentProps[],
+  categories: { id: string, name: string }[],
+  creditCards: { id: string, name: string }[]
+}) {
   const [isPending, startTransition] = useTransition();
   const [editingInstallment, setEditingInstallment] = useState<InstallmentProps | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
+  const [addError, setAddError] = useState('');
 
   const handleDelete = (id: string) => {
     if (confirm('Atenção: Excluir este parcelamento irá apagar também TODAS as faturas futuras vinculadas a ele. Transações passadas serão mantidas. Deseja continuar?')) {
@@ -39,6 +50,21 @@ export function InstallmentClient({ installments }: { installments: InstallmentP
     });
   };
 
+  const handleAdd = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setAddError('');
+    const formData = new FormData(e.currentTarget);
+    
+    startTransition(async () => {
+      const res = await createInstallmentPurchase(formData);
+      if (res?.error) {
+        setAddError(res.error);
+      } else {
+        setIsAdding(false);
+      }
+    });
+  };
+
   // Metricas
   const activeInstallments = installments.filter(i => i.paidCount < i.installmentsCount);
   const totalDebt = activeInstallments.reduce((acc, curr) => acc + Number(curr.remainingAmount), 0);
@@ -50,6 +76,17 @@ export function InstallmentClient({ installments }: { installments: InstallmentP
 
   return (
     <>
+      <div className="flex justify-between items-center mb-8 mt-[-2.5rem]">
+        <div /> {/* Espaçador para manter o botão à direita, o título está na page */}
+        <button 
+          onClick={() => setIsAdding(true)} 
+          className="bg-brand hover:bg-brand-dark text-white flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer"
+        >
+          <Plus size={18} />
+          <span>Nova Compra</span>
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div className="glass-panel p-6 rounded-2xl flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-rose-500/10 flex items-center justify-center">
@@ -180,6 +217,79 @@ export function InstallmentClient({ installments }: { installments: InstallmentP
                 className="w-full mt-4 bg-brand hover:bg-brand-dark text-white font-medium py-3 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
               >
                 {isPending ? 'Salvando...' : 'Salvar Alterações'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Nova Compra */}
+      {isAdding && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass-panel p-6 rounded-2xl w-full max-w-md relative animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
+            <button 
+              onClick={() => { setIsAdding(false); setAddError(''); }} 
+              className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
+            >
+              <X size={20}/>
+            </button>
+            <h2 className="text-xl font-bold mb-6">Nova Compra Parcelada</h2>
+            
+            {addError && (
+              <div className="bg-rose-500/10 border border-rose-500/50 text-rose-400 p-3 rounded-lg text-sm mb-4">
+                {addError}
+              </div>
+            )}
+
+            <form onSubmit={handleAdd} className="flex flex-col gap-4">
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Descrição</label>
+                <input required name="description" type="text" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder="Ex: iPhone 15" />
+              </div>
+              
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Valor da Parcela (R$)</label>
+                <input required name="amount" type="number" step="0.01" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder="0.00" />
+              </div>
+              
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Categoria</label>
+                {categories.length > 0 ? (
+                  <select required name="category" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors">
+                    {categories.map(c => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input required name="category" type="text" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder="Ex: Serviços" />
+                )}
+              </div>
+
+              {creditCards.length > 0 && (
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">Cartão de Crédito (Opcional)</label>
+                  <select name="creditCardId" defaultValue="" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors">
+                    <option value="">Nenhum (Débito/Dinheiro)</option>
+                    {creditCards.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">Qtd. de Parcelas</label>
+                  <input required min="2" max="360" name="installmentsCount" type="number" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder="Ex: 12" />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1" title="Em qual parcela você está agora?">Parcela Atual</label>
+                  <input required min="1" max="360" name="currentInstallment" type="number" defaultValue="1" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" />
+                </div>
+              </div>
+
+              <button disabled={isPending} type="submit" className="w-full bg-brand hover:bg-brand-dark text-white font-medium py-3 rounded-xl mt-4 cursor-pointer disabled:opacity-50">
+                {isPending ? 'Salvando...' : 'Adicionar Compra'}
               </button>
             </form>
           </div>

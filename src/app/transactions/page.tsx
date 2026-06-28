@@ -2,7 +2,7 @@ import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { db } from '@/db';
 import { transactions, categories } from '@/db/schema';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, sql } from 'drizzle-orm';
 import { TransactionRow, TransactionType } from '@/components/dashboard/TransactionRow';
 import Link from 'next/link';
 
@@ -25,12 +25,16 @@ export default async function TransactionsPage({
   // Busca categorias
   const userCategories = await db.select().from(categories).where(eq(categories.userId, session.user.id));
 
-  // Count total for pagination
+  const now = new Date();
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  // Count total for pagination (apenas até o final do mês atual)
   const allTxs = await db.select({ id: transactions.id })
     .from(transactions)
     .where(and(
       eq(transactions.userId, session.user.id),
-      eq(transactions.status, 'confirmed')
+      eq(transactions.status, 'confirmed'),
+      sql`${transactions.createdAt} <= ${endOfMonth}`
     ));
     
   const totalItems = allTxs.length;
@@ -41,7 +45,8 @@ export default async function TransactionsPage({
     .from(transactions)
     .where(and(
       eq(transactions.userId, session.user.id),
-      eq(transactions.status, 'confirmed')
+      eq(transactions.status, 'confirmed'),
+      sql`${transactions.createdAt} <= ${endOfMonth}`
     ))
     .orderBy(desc(transactions.createdAt))
     .limit(limit)
@@ -54,7 +59,7 @@ export default async function TransactionsPage({
           Histórico de <span className="text-gradient">Transações</span>
         </h1>
         <p className="text-slate-400 mt-2">
-          Visualize todas as suas movimentações, incluindo as faturas futuras de cartão de crédito.
+          Visualize o histórico de suas movimentações passadas e do mês vigente.
         </p>
       </header>
 
