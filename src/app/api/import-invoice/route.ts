@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
 export async function POST(req: NextRequest) {
   try {
     // Importação dinâmica para evitar o erro DOMMatrix is not defined no build do Next.js
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const pdfParseModule: any = await import('pdf-parse');
     const pdfParse = pdfParseModule.default || pdfParseModule;
 

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { db } from '@/db';
 import { transactions } from '@/db/schema';
