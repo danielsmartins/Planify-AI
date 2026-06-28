@@ -40,7 +40,7 @@ export async function updateAccount(id: string, formData: FormData) {
   const type = formData.get('type') as 'checking' | 'savings' | 'investment' | 'cash';
   const balance = formData.get('balance') as string;
 
-  const dataToUpdate: any = {};
+  const dataToUpdate: Record<string, string> = {};
   if (name) dataToUpdate.name = name;
   if (color) dataToUpdate.color = color;
   if (type) dataToUpdate.type = type;

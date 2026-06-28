@@ -20,7 +20,7 @@ export function PdfReportButton() {
       } else {
         alert(data.error || 'Erro ao gerar relatório');
       }
-    } catch (error) {
+    } catch {
       alert('Erro na conexão com a IA.');
     } finally {
       setLoading(false);

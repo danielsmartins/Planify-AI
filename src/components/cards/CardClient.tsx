@@ -104,7 +104,7 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
         setImportMessage(data.message);
         router.refresh();
       }
-    } catch (error) {
+    } catch {
       setImportError('Erro na conexão. Tente novamente.');
     } finally {
       setImportLoading(false);

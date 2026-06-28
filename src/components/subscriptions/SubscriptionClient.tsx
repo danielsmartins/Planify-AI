@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useTransition } from 'react';
 import { addSubscription, deleteSubscription, toggleSubscriptionStatus } from '@/app/subscriptions/actions';
 import { Trash2, Plus, CalendarClock, Ban, CheckCircle2, RotateCcw } from 'lucide-react';
-import Link from 'next/link';
 
 interface SubscriptionProps {
   id: string;
