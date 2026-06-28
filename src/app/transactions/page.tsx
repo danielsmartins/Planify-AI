@@ -4,7 +4,6 @@ import { db } from '@/db';
 import { transactions, categories } from '@/db/schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { TransactionRow, TransactionType } from '@/components/dashboard/TransactionRow';
-import { CategoryLimitChart } from '@/components/analytics/CategoryLimitChart';
 import Link from 'next/link';
 
 export default async function TransactionsPage({
@@ -27,42 +26,7 @@ export default async function TransactionsPage({
   const userCategories = await db.select().from(categories).where(eq(categories.userId, session.user.id));
 
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-
-  // Busca despesas do mês atual para o gráfico de limites
-  const currentMonthTxs = await db.select().from(transactions).where(
-    and(
-      eq(transactions.userId, session.user.id),
-      eq(transactions.status, 'confirmed'),
-      eq(transactions.type, 'expense'),
-      sql`${transactions.createdAt} >= ${startOfMonth}`,
-      sql`${transactions.createdAt} <= ${endOfMonth}`
-    )
-  );
-
-  const categoryStats: Record<string, { spent: number, limit: number, color: string }> = {};
-  userCategories.forEach(c => {
-    categoryStats[c.name] = { spent: 0, limit: parseFloat(c.monthlyLimit || '0'), color: c.color };
-  });
-
-  currentMonthTxs.forEach(tx => {
-    if (categoryStats[tx.category]) {
-      categoryStats[tx.category].spent += parseFloat(tx.amount);
-    } else {
-      categoryStats[tx.category] = { spent: parseFloat(tx.amount), limit: 0, color: '#64748b' };
-    }
-  });
-
-  const limitsData = Object.entries(categoryStats)
-    .filter(([, data]) => data.limit > 0 || data.spent > 0)
-    .map(([name, data]) => ({
-      name,
-      spent: data.spent,
-      limit: data.limit,
-      color: data.color
-    }))
-    .sort((a, b) => b.spent - a.spent);
 
   // Count total for pagination (apenas até o final do mês atual)
   const allTxs = await db.select({ id: transactions.id })
@@ -98,10 +62,6 @@ export default async function TransactionsPage({
           Visualize o histórico de suas movimentações passadas e do mês vigente.
         </p>
       </header>
-
-      <div className="mb-8">
-        <CategoryLimitChart data={limitsData} />
-      </div>
 
       <section className="glass-panel rounded-2xl p-6 md:p-8">
         {paginatedTransactions.length === 0 ? (

@@ -65,7 +65,7 @@ export function CategoryLimitChart({ data }: CategoryLimitChartProps) {
         </div>
       </div>
 
-      <div className="flex-1 w-full min-h-[300px]">
+      <div className="w-full" style={{ height: '350px' }}>
         {!hasData ? (
           <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">
             Nenhuma despesa ou limite configurado neste mês.
