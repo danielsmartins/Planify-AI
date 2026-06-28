@@ -66,3 +66,49 @@ Regras:
     return null;
   }
 }
+
+export async function extractInvoiceTransactions(text: string, existingCategories: string[] = []): Promise<ExtractedData[]> {
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    const prompt = `
+Você é um assistente financeiro de extração de faturas de cartão de crédito.
+Abaixo está o texto extraído de uma fatura de cartão de crédito em PDF:
+
+"""
+${text.substring(0, 30000)} // Limite para não estourar tokens
+"""
+
+Sua tarefa é extrair TODAS as compras/despesas listadas nessa fatura e retornar um array JSON contendo cada transação.
+
+Formato esperado:
+[
+  {
+    "amount": número (valor da compra),
+    "description": string (descrição do estabelecimento/compra),
+    "category": string (classifique a compra),
+    "type": "expense"
+  }
+]
+
+Categorias existentes do usuário: ${existingCategories.length > 0 ? existingCategories.join(', ') : 'Nenhuma categoria cadastrada'}.
+Regras:
+1. Tente usar as categorias existentes, se não achar nenhuma parecida, crie uma nova concisa (ex: Restaurante, Supermercado, Transporte).
+2. Não inclua pagamentos da fatura em si, apenas as despesas/compras feitas no cartão.
+3. Se for uma compra parcelada que já está na fatura (ex: "Compra X 02/10"), o valor que aparece já é o da parcela, então lance como uma despesa simples desse mês.
+4. Retorne APENAS o JSON puro, sem marcações markdown ou \`\`\`.
+`;
+
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text().trim().replace(/```json/g, '').replace(/```/g, '');
+    
+    if (responseText === 'null' || responseText === '') return [];
+
+    const parsed = JSON.parse(responseText);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error("Gemini Invoice Extraction Error:", error);
+    return [];
+  }
+}
+

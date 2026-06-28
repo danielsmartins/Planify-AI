@@ -8,6 +8,7 @@ import { CategoryPieChart } from '@/components/analytics/CategoryPieChart';
 import { CategoryLimitChart } from '@/components/analytics/CategoryLimitChart';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { Wallet, TrendingUp, TrendingDown } from 'lucide-react';
+import { PdfReportButton } from '@/components/analytics/PdfReportButton';
 
 export default async function AnalyticsPage() {
   const session = await getSession();
@@ -108,13 +109,16 @@ export default async function AnalyticsPage() {
 
   return (
     <div className="py-2">
-      <header className="mb-8">
-        <h1 className="text-3xl font-extrabold tracking-tight">
-          Análise <span className="text-gradient">Histórica</span>
-        </h1>
-        <p className="text-slate-400 mt-2">
-          Visualize o seu desempenho financeiro ao longo do tempo e entenda para onde o seu dinheiro está indo.
-        </p>
+      <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight">
+            Análise <span className="text-gradient">Histórica</span>
+          </h1>
+          <p className="text-slate-400 mt-2">
+            Visualize o seu desempenho financeiro ao longo do tempo e entenda para onde o seu dinheiro está indo.
+          </p>
+        </div>
+        <PdfReportButton />
       </header>
 
       {/* KPI Cards */}

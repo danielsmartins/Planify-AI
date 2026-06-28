@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from 'react';
 import { deleteCreditCard, updateCreditCard, addCreditCard } from '@/app/cards/actions';
-import { CreditCard, Trash2, Edit2, Plus, Calendar, X } from 'lucide-react';
+import { CreditCard, Trash2, Edit2, Plus, Calendar, X, Upload, Sparkles } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 interface CardProps {
   id: string;
@@ -22,6 +23,14 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
   const [formName, setFormName] = useState('');
   const [formColor, setFormColor] = useState('#8b5cf6');
   const [formBrand, setFormBrand] = useState('mastercard');
+
+  // Import Invoice State
+  const [isImporting, setIsImporting] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importMessage, setImportMessage] = useState('');
+  const [importError, setImportError] = useState('');
+  
+  const router = useRouter();
 
   const CARD_TEMPLATES = [
     { name: 'Nubank', color: '#8A05BE', brand: 'mastercard' },
@@ -74,17 +83,55 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
     }
   };
 
+  const handleImport = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setImportLoading(true);
+    setImportMessage('');
+    setImportError('');
+    
+    const formData = new FormData(e.currentTarget);
+    
+    try {
+      const res = await fetch('/api/import-invoice', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      
+      if (!res.ok || data.error) {
+        setImportError(data.error || 'Erro ao importar fatura.');
+      } else {
+        setImportMessage(data.message);
+        router.refresh();
+      }
+    } catch (error) {
+      setImportError('Erro na conexão. Tente novamente.');
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
   return (
     <>
       <div className="flex justify-between items-center mb-8">
         <p className="text-slate-400">Gerencie seus cartões de crédito para calcular vencimentos automaticamente.</p>
-        <button 
-          onClick={() => setIsAdding(true)}
-          className="flex items-center gap-2 bg-brand hover:bg-brand-dark text-white px-4 py-2 rounded-xl text-sm font-medium transition-all"
-        >
-          <Plus size={16} />
-          Adicionar Cartão
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setIsImporting(true)}
+            className="flex items-center gap-2 bg-slate-800/50 hover:bg-slate-700/50 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all border border-slate-700/50"
+          >
+            <Sparkles size={16} className="text-brand" />
+            <span className="hidden sm:inline">Importar Fatura PDF</span>
+          </button>
+          
+          <button 
+            onClick={() => setIsAdding(true)}
+            className="flex items-center gap-2 bg-brand hover:bg-brand-dark text-white px-4 py-2 rounded-xl text-sm font-medium transition-all"
+          >
+            <Plus size={16} />
+            <span className="hidden sm:inline">Adicionar Cartão</span>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -295,6 +342,70 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
                 className="w-full mt-4 bg-brand hover:bg-brand-dark text-white font-medium py-3 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
               >
                 {isPending ? 'Salvando...' : 'Salvar Cartão'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Importar Fatura */}
+      {isImporting && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass-panel p-6 rounded-2xl w-full max-w-md relative animate-in fade-in zoom-in duration-200">
+            <button 
+              onClick={() => { setIsImporting(false); setImportMessage(''); setImportError(''); }} 
+              className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
+            >
+              <X size={20}/>
+            </button>
+            <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
+              <Sparkles className="text-brand" size={24} />
+              Leitura Inteligente
+            </h2>
+            <p className="text-sm text-slate-400 mb-6">
+              Faça upload do PDF da sua fatura e nossa Inteligência Artificial vai extrair e categorizar todas as suas compras automaticamente.
+            </p>
+
+            {importMessage && (
+              <div className="bg-emerald-500/10 border border-emerald-500/50 text-emerald-400 p-3 rounded-lg text-sm mb-4">
+                {importMessage}
+              </div>
+            )}
+
+            {importError && (
+              <div className="bg-rose-500/10 border border-rose-500/50 text-rose-400 p-3 rounded-lg text-sm mb-4">
+                {importError}
+              </div>
+            )}
+
+            <form onSubmit={handleImport} className="flex flex-col gap-4">
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Qual é o cartão?</label>
+                <select name="creditCardId" required className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-sm text-slate-100 focus:border-brand focus:outline-none transition-colors">
+                  <option value="">Selecione o cartão...</option>
+                  {cards.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Arquivo da Fatura (PDF)</label>
+                <div className="relative">
+                  <input type="file" name="file" accept="application/pdf" required className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                  <div className="w-full bg-slate-900/50 border-2 border-dashed border-slate-700 hover:border-brand/50 rounded-xl p-8 flex flex-col items-center justify-center gap-2 text-slate-400 transition-colors">
+                    <Upload size={24} />
+                    <span className="text-sm font-medium">Clique ou arraste o PDF aqui</span>
+                  </div>
+                </div>
+              </div>
+
+              <button 
+                type="submit"
+                disabled={importLoading || cards.length === 0}
+                className="w-full mt-2 bg-gradient-to-r from-purple-500 to-brand hover:from-purple-600 hover:to-brand-dark text-white font-medium py-3 rounded-xl transition-all disabled:opacity-50 cursor-pointer flex justify-center items-center gap-2 shadow-[0_0_15px_rgba(139,92,246,0.3)]"
+              >
+                {importLoading ? 'A IA está lendo o PDF...' : 'Extrair Transações'}
               </button>
             </form>
           </div>
