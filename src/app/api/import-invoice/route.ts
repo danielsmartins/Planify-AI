@@ -4,10 +4,12 @@ import { extractInvoiceTransactions } from '@/lib/gemini';
 import { db } from '@/db';
 import { transactions, categories, creditCards } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import pdfParse from 'pdf-parse';
-
 export async function POST(req: NextRequest) {
   try {
+    // Importação dinâmica para evitar o erro DOMMatrix is not defined no build do Next.js
+    const pdfParseModule: any = await import('pdf-parse');
+    const pdfParse = pdfParseModule.default || pdfParseModule;
+
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
