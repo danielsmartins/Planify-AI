@@ -18,8 +18,8 @@ export function StatCard({ title, amount, icon: Icon, trend, trendValue, isAccen
       )}
       <div className="flex justify-between items-start mb-4">
         <div>
-          <p className="text-sm font-medium text-slate-400 mb-1">{title}</p>
-          <h3 className="text-3xl font-bold tracking-tight text-slate-50">{amount}</h3>
+          <p className="text-sm font-medium text-slate-400 mb-1 line-clamp-1">{title}</p>
+          <h3 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-50">{amount}</h3>
         </div>
         <div className={`p-3 rounded-xl ${isAccent ? 'bg-brand/20 text-brand-light' : 'bg-slate-800/50 text-slate-300'}`}>
           <Icon size={22} strokeWidth={2.5} />

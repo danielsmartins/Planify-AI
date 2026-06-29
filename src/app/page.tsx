@@ -116,13 +116,15 @@ export default async function Home() {
       </header>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-        <StatCard 
-          title="Saldo deste Mês" 
-          amount={formatBRL(balance)} 
-          icon={Wallet} 
-          isAccent 
-        />
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mb-12">
+        <div className="col-span-2 md:col-span-1">
+          <StatCard 
+            title="Saldo deste Mês" 
+            amount={formatBRL(balance)} 
+            icon={Wallet} 
+            isAccent 
+          />
+        </div>
         <StatCard 
           title="Entradas do Mês" 
           amount={formatBRL(totalIncome)} 
