@@ -32,16 +32,14 @@ export async function GET() {
       });
     }
 
-    const txsSummary = userTxs.map(t => `${t.type === 'income' ? 'RECEITA' : 'DESPESA'} | ${t.category} | R$ ${t.amount} | ${t.description}`).join('\n');
-
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const prompt = `
 Você é o "Planify AI", um consultor financeiro de alto nível.
-Analise as transações deste mês do usuário e escreva um relatório gerencial em português.
+Analise as transações deste mês do usuário (fornecidas no JSON abaixo) e escreva um relatório gerencial em português.
 
 Transações do mês:
-${txsSummary}
+${JSON.stringify(userTxs)}
 
 Instruções para o relatório:
 1. Resuma como está o balanço do mês (gastou mais que ganhou?).
