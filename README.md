@@ -13,7 +13,7 @@ Um aplicativo web moderno de controle financeiro com integração via WhatsApp, 
 ## 📐 Arquitetura
 O sistema utiliza a arquitetura Full-Stack do Next.js:
 - `src/app`: Rotas da interface gráfica (Painel de Controle).
-- `src/app/api`: Webhooks e APIs para recebimento das mensagens do WhatsApp.
+- `src/app/api`: Webhooks e APIs para recebimento das mensagens do Telegram.
 - `src/db`: Configuração, instâncias e schema do banco de dados Drizzle.
 - `src/components`: Componentes reutilizáveis da UI.
 
