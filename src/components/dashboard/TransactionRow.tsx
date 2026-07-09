@@ -13,6 +13,10 @@ interface TransactionProps {
   type: TransactionType;
   category: string;
   date: string;
+  accountId?: string | null;
+  creditCardId?: string | null;
+  accountName?: string | null;
+  creditCardName?: string | null;
   categoriesList?: { id: string, name: string }[];
 }
 
@@ -27,7 +31,19 @@ const CategoryIcon = ({ category, type }: { category: string, type: TransactionT
   }
 };
 
-export function TransactionRow({ id, description, amount, type, category, date, categoriesList = [] }: TransactionProps) {
+export function TransactionRow({ 
+  id, 
+  description, 
+  amount, 
+  type, 
+  category, 
+  date, 
+  accountId,
+  creditCardId,
+  accountName,
+  creditCardName,
+  categoriesList = [] 
+}: TransactionProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -54,45 +70,74 @@ export function TransactionRow({ id, description, amount, type, category, date, 
     });
   };
 
+  // Calcular label de pagamento
+  let paymentLabel = '';
+  if (accountId && creditCardId) {
+    paymentLabel = `Fatura: ${creditCardName} via ${accountName}`;
+  } else if (creditCardId) {
+    paymentLabel = `Crédito: ${creditCardName}`;
+  } else if (accountName) {
+    paymentLabel = accountName;
+  }
+
   return (
     <>
-      <div className="flex items-center justify-between p-4 mb-2 rounded-xl bg-slate-800/20 border border-slate-700/30 hover:bg-slate-800/40 transition-colors group">
-        <div className="flex items-center gap-4">
-          <div className={`p-3 rounded-xl ${type === 'income' ? 'bg-emerald-500/10' : 'bg-slate-700/30'}`}>
-            <CategoryIcon category={category} type={type} />
+      <tr className="border-b border-neutral-900/60 hover:bg-neutral-900/20 transition-colors group text-xs text-neutral-300">
+        <td className="py-3 px-4 font-medium text-neutral-500">
+          {date}
+        </td>
+        <td className="py-3 px-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-neutral-900 border border-neutral-850 shrink-0 text-slate-400">
+              <CategoryIcon category={category} type={type} />
+            </div>
+            <div>
+              <p className="font-semibold text-slate-200 group-hover:text-white transition-colors">{description}</p>
+              <p className="text-[10px] text-neutral-500 mt-0.5">{category}</p>
+            </div>
           </div>
-          <div>
-            <p className="font-medium text-slate-200 group-hover:text-white transition-colors">{description}</p>
-            <p className="text-xs text-slate-500">{category} • {date}</p>
+        </td>
+        <td className="py-3 px-4">
+          {paymentLabel ? (
+            <span className="bg-neutral-900 border border-neutral-800/60 text-slate-300 px-2.5 py-1 rounded-xl text-[10px] font-medium tracking-wide">
+              {paymentLabel}
+            </span>
+          ) : (
+            <span className="text-neutral-600 text-[10px] italic">-</span>
+          )}
+        </td>
+        <td className="py-3 px-4">
+          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${type === 'income' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-neutral-800 text-neutral-400 border border-neutral-700/50'}`}>
+            {type === 'income' ? 'RECEBIDO' : 'PAGO'}
+          </span>
+        </td>
+        <td className="py-3 px-4 text-right font-semibold text-sm">
+          <div className="flex items-center justify-end gap-3">
+            {/* Ações (invisíveis por padrão, aparecem no hover) */}
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button 
+                onClick={() => setIsEditing(true)}
+                disabled={isPending}
+                className="p-1.5 text-slate-500 hover:text-white transition-colors disabled:opacity-50 cursor-pointer"
+                title="Editar"
+              >
+                <Edit2 size={13} />
+              </button>
+              <button 
+                onClick={handleDelete}
+                disabled={isPending}
+                className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors disabled:opacity-50 cursor-pointer"
+                title="Excluir"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+            <span className={type === 'income' ? 'text-emerald-400' : 'text-slate-100'}>
+              {type === 'income' ? '+' : '-'}{formattedAmount}
+            </span>
           </div>
-        </div>
-        
-        <div className="flex items-center gap-4">
-          {/* Ações (invisíveis por padrão, aparecem no hover) */}
-          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button 
-              onClick={() => setIsEditing(true)}
-              disabled={isPending}
-              className="p-2 text-slate-400 hover:text-brand transition-colors disabled:opacity-50"
-              title="Editar"
-            >
-              <Edit2 size={16} />
-            </button>
-            <button 
-              onClick={handleDelete}
-              disabled={isPending}
-              className="p-2 text-slate-400 hover:text-rose-400 transition-colors disabled:opacity-50"
-              title="Excluir"
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-
-          <div className={`font-semibold ${type === 'income' ? 'text-emerald-400' : 'text-slate-100'} min-w-[100px] text-right`}>
-            {type === 'income' ? '+' : '-'}{formattedAmount}
-          </div>
-        </div>
-      </div>
+        </td>
+      </tr>
 
       {/* Edit Modal */}
       {isEditing && (
@@ -123,7 +168,7 @@ export function TransactionRow({ id, description, amount, type, category, date, 
                   <input required name="category" defaultValue={category} type="text" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" />
                 )}
               </div>
-              <button disabled={isPending} type="submit" className="w-full bg-brand hover:bg-brand-dark text-white font-medium py-3 rounded-xl mt-4 cursor-pointer disabled:opacity-50">
+              <button disabled={isPending} type="submit" className="w-full bg-brand hover:bg-brand-light text-black font-semibold py-3 rounded-xl mt-4 cursor-pointer disabled:opacity-50">
                 {isPending ? 'Salvando...' : 'Salvar Alterações'}
               </button>
             </form>

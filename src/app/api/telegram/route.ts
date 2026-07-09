@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { users, transactions, categories, installments } from "@/db/schema";
+import { users, transactions, categories, installments, accounts, creditCards } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { extractFinancialData } from "@/lib/gemini";
 import { sendTelegramMessage, answerCallbackQuery } from "@/lib/telegram";
@@ -27,8 +27,24 @@ export async function POST(req: NextRequest) {
         await sendTelegramMessage(chatId, "❌ Compra parcelada cancelada.");
       } else if (callbackData.startsWith('confirm_')) {
         const txId = callbackData.split('_')[1];
-        await db.update(transactions).set({ status: 'confirmed' }).where(eq(transactions.id, txId));
-        await sendTelegramMessage(chatId, "✅ Transação confirmada e salva com sucesso!");
+        const txRes = await db.select().from(transactions).where(eq(transactions.id, txId));
+        if (txRes.length > 0 && txRes[0].status === 'pending') {
+          const tx = txRes[0];
+          if (tx.accountId) {
+            const accRes = await db.select().from(accounts).where(eq(accounts.id, tx.accountId));
+            if (accRes.length > 0) {
+              const acc = accRes[0];
+              const currentBalance = parseFloat(acc.balance);
+              const val = parseFloat(tx.amount);
+              const newBalance = tx.type === 'income' ? currentBalance + val : currentBalance - val;
+              await db.update(accounts).set({ balance: newBalance.toString() }).where(eq(accounts.id, tx.accountId));
+            }
+          }
+          await db.update(transactions).set({ status: 'confirmed' }).where(eq(transactions.id, txId));
+          await sendTelegramMessage(chatId, "✅ Transação confirmada e salva com sucesso!");
+        } else {
+          await sendTelegramMessage(chatId, "⚠️ Transação já processada ou não encontrada.");
+        }
       } else if (callbackData.startsWith('cancel_')) {
         const txId = callbackData.split('_')[1];
         await db.delete(transactions).where(eq(transactions.id, txId));
@@ -39,33 +55,58 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ status: "Callback processed" });
     }
 
-    // As mensagens de texto vêm dentro de 'message'
+    // As mensagens de texto ou voz vêm dentro de 'message'
     const message = body.message;
-    if (!message || !message.text || !message.chat) {
+    if (!message || (!message.text && !message.voice) || !message.chat) {
       return NextResponse.json({ status: "Ignored" });
     }
 
     const chatId = message.chat.id.toString();
-    const textMessage = message.text.trim();
+    const textMessage = message.text ? message.text.trim() : "";
+    let audioData: { base64: string; mimeType: string } | undefined = undefined;
+
+    // Se for mensagem de voz, baixamos do Telegram
+    if (message.voice) {
+      try {
+        const voice = message.voice;
+        const fileId = voice.file_id;
+        const mimeType = voice.mime_type || "audio/ogg";
+        const botToken = process.env.TELEGRAM_BOT_TOKEN;
+        
+        const fileInfoRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
+        const fileInfo = await fileInfoRes.json();
+        
+        if (fileInfo.ok && fileInfo.result.file_path) {
+          const filePath = fileInfo.result.file_path;
+          const fileRes = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`);
+          const arrayBuffer = await fileRes.arrayBuffer();
+          const base64 = Buffer.from(arrayBuffer).toString('base64');
+          audioData = { base64, mimeType };
+        }
+      } catch (voiceError) {
+        console.error("Erro ao processar mensagem de voz do Telegram:", voiceError);
+        await sendTelegramMessage(chatId, "⚠️ Erro ao tentar processar o áudio. Tente enviar como texto.");
+        return NextResponse.json({ status: "Error processing voice" });
+      }
+    }
 
     // Comando /help
-    if (textMessage.toLowerCase().startsWith("/help")) {
+    if (textMessage && textMessage.toLowerCase().startsWith("/help")) {
       const helpMsg = `
 🤖 *Planify AI - Ajuda*
 
-Você pode registrar despesas, ganhos e até compras parceladas apenas me mandando mensagens! Veja alguns exemplos:
+Você pode registrar despesas, ganhos e até compras parceladas apenas me mandando mensagens de texto ou voz! Veja alguns exemplos:
 
 💸 *Despesas:*
 - "Gastei 25 reais de Uber"
-- "Almocei no restaurante, deu R$ 45,90"
+- Enviar áudio: "Almocei no restaurante, deu R$ 45,90"
 
 💰 *Ganhos:*
 - "Recebi 5000 do meu salário"
-- "Vendi uma bicicleta por 300 reais"
+- Enviar áudio: "Vendi uma bicicleta por 300 reais"
 
 💳 *Compras Parceladas:*
 - "Comprei uma geladeira de 3000 em 10 vezes no crédito"
-- "Passei uma viagem de 1500 em 5x, já paguei a primeira parcela"
 
 O bot irá entender, categorizar automaticamente e pedir para você confirmar antes de salvar!
       `;
@@ -74,14 +115,14 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
     }
 
     // Comando de /start para vincular a conta
-    if (textMessage.startsWith("/start")) {
+    if (textMessage && textMessage.startsWith("/start")) {
       const parts = textMessage.split(" ");
       if (parts.length > 1) {
         const userId = parts[1];
         try {
           // Atualiza o usuário com o telegramChatId
           await db.update(users).set({ telegramChatId: chatId }).where(eq(users.id, userId));
-          await sendTelegramMessage(chatId, "🎉 *Conta vinculada com sucesso!*\n\nAgora você pode me enviar seus gastos ou ganhos diretamente por aqui.\n\nExemplo: `Comprei pão por 15 reais no débito`\n\nDigite /help para ver mais exemplos.");
+          await sendTelegramMessage(chatId, "🎉 *Conta vinculada com sucesso!*\n\nAgora você pode me enviar seus gastos ou ganhos diretamente por aqui, digitando ou por áudio.\n\nExemplo: `Comprei pão por 15 reais no débito`\n\nDigite /help para ver mais exemplos.");
           return NextResponse.json({ status: "Linked" });
         } catch {
           await sendTelegramMessage(chatId, "❌ Erro ao vincular sua conta. Tente novamente pelo site.");
@@ -103,14 +144,14 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
     }
 
     // Extrair dados via IA (Gemini)
-    await sendTelegramMessage(chatId, "⏳ Analisando sua mensagem...");
+    await sendTelegramMessage(chatId, message.voice ? "⏳ Escutando e analisando seu áudio..." : "⏳ Analisando sua mensagem...");
     
     const userCategoriesObj = await db.select().from(categories).where(eq(categories.userId, user.id));
     const userCategories = userCategoriesObj.map(c => c.name);
 
     let extractedData;
     try {
-      extractedData = await extractFinancialData(textMessage, userCategories);
+      extractedData = await extractFinancialData(textMessage, userCategories, audioData);
     } catch (e: unknown) {
       if (e instanceof Error && e.message === 'RATE_LIMIT') {
           await sendTelegramMessage(chatId, "⚠️ *Alerta*: Limite grátis de Inteligência Artificial atingido! A cota expirou por enquanto. Tente novamente mais tarde.");
@@ -120,7 +161,7 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
     }
 
     if (!extractedData) {
-      await sendTelegramMessage(chatId, "🤔 Não consegui identificar um gasto ou ganho nessa mensagem. Pode tentar escrever de outra forma?\n\nExemplo: `Uber 25 reais`");
+      await sendTelegramMessage(chatId, message.voice ? "🤔 Não consegui identificar um gasto ou ganho no seu áudio. Pode tentar falar mais claro ou mandar como texto?" : "🤔 Não consegui identificar um gasto ou ganho nessa mensagem. Pode tentar escrever de outra forma?\n\nExemplo: `Uber 25 reais`");
       return NextResponse.json({ status: "Ignored text" });
     }
 
@@ -136,8 +177,25 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
       });
     }
 
+    // Buscar contas e cartões do usuário para vincular à transação
+    const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, user.id));
+    const userCards = await db.select().from(creditCards).where(eq(creditCards.userId, user.id));
+
     // Se for uma compra parcelada
     if (extractedData.isInstallment && extractedData.installmentsCount) {
+      // Parcelamento deve estar atrelado a um cartão ou conta
+      const creditCardId: string | null = userCards.length > 0 ? userCards[0].id : null;
+      let accountId: string | null = null;
+      
+      if (!creditCardId && userAccounts.length > 0) {
+        accountId = userAccounts[0].id;
+      }
+      
+      if (!creditCardId && !accountId) {
+        await sendTelegramMessage(chatId, "⚠️ Você precisa cadastrar pelo menos uma conta ou cartão no site do Planify AI antes de registrar parcelamentos.");
+        return NextResponse.json({ status: "No accounts or cards" });
+      }
+
       const installmentsCount = extractedData.installmentsCount;
       const currentInst = extractedData.currentInstallment || 1;
       const installmentAmount = extractedData.amount;
@@ -149,6 +207,7 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
         category: extractedData.category,
         totalAmount: totalAmount.toString(),
         installmentsCount: installmentsCount.toString(),
+        creditCardId: creditCardId || null,
       }).returning();
 
       const txValues = [];
@@ -163,6 +222,8 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
           category: extractedData.category,
           type: 'expense' as const,
           installmentId: newInst.id,
+          creditCardId: creditCardId || null,
+          accountId: accountId || null,
           createdAt: txDate,
           status: 'pending' as const,
         });
@@ -191,12 +252,38 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
     }
 
     // Se for transação normal (não parcelada)
+    let accountId: string | null = null;
+    let creditCardId: string | null = null;
+
+    if (extractedData.type === 'income') {
+      if (userAccounts.length === 0) {
+        await sendTelegramMessage(chatId, "⚠️ Você precisa ter pelo menos uma conta cadastrada no Planify AI para registrar receitas (ganhos).");
+        return NextResponse.json({ status: "No accounts for income" });
+      }
+      accountId = userAccounts[0].id;
+    } else {
+      // É despesa
+      const isCredit = textMessage.toLowerCase().includes('crédito') || textMessage.toLowerCase().includes('cartão');
+      if (isCredit && userCards.length > 0) {
+        creditCardId = userCards[0].id;
+      } else if (userAccounts.length > 0) {
+        accountId = userAccounts[0].id;
+      } else if (userCards.length > 0) {
+        creditCardId = userCards[0].id;
+      } else {
+        await sendTelegramMessage(chatId, "⚠️ Você precisa cadastrar pelo menos uma conta ou cartão no site do Planify AI antes de registrar despesas.");
+        return NextResponse.json({ status: "No accounts or cards for expense" });
+      }
+    }
+
     const [newTx] = await db.insert(transactions).values({
       userId: user.id,
       amount: extractedData.amount.toString(),
       description: extractedData.description,
       category: extractedData.category,
       type: extractedData.type as "income" | "expense",
+      accountId,
+      creditCardId,
       status: 'pending', // Fica aguardando confirmação
     }).returning();
 

@@ -17,7 +17,7 @@ export async function addSubscription(formData: FormData) {
   const nextBillingDateStr = formData.get('nextBillingDate') as string;
   const accountId = formData.get('accountId') as string | null;
   const creditCardId = formData.get('creditCardId') as string | null;
-  const color = formData.get('color') as string || '#8b5cf6';
+  const color = formData.get('color') as string || '#10b981';
 
   if (!name || isNaN(amount) || !category || !nextBillingDateStr) {
     return { error: 'Preencha todos os campos obrigatórios corretamente' };

@@ -1,8 +1,8 @@
 import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { db } from '@/db';
-import { transactions, categories } from '@/db/schema';
-import { eq, desc, and, sql } from 'drizzle-orm';
+import { transactions, categories, accounts, creditCards } from '@/db/schema';
+import { eq, desc, and } from 'drizzle-orm';
 import { TransactionRow, TransactionType } from '@/components/dashboard/TransactionRow';
 import Link from 'next/link';
 
@@ -22,19 +22,19 @@ export default async function TransactionsPage({
   const limit = 20;
   const offset = (page - 1) * limit;
 
-  // Busca categorias
+  // Busca categorias, contas e cartões
   const userCategories = await db.select().from(categories).where(eq(categories.userId, session.user.id));
+  const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, session.user.id));
+  const userCards = await db.select().from(creditCards).where(eq(creditCards.userId, session.user.id));
 
-  const now = new Date();
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-  // Count total for pagination (apenas até o final do mês atual)
+
+  // Count total for pagination (todas as transações confirmadas)
   const allTxs = await db.select({ id: transactions.id })
     .from(transactions)
     .where(and(
       eq(transactions.userId, session.user.id),
-      eq(transactions.status, 'confirmed'),
-      sql`${transactions.createdAt} <= ${endOfMonth}`
+      eq(transactions.status, 'confirmed')
     ));
     
   const totalItems = allTxs.length;
@@ -45,8 +45,7 @@ export default async function TransactionsPage({
     .from(transactions)
     .where(and(
       eq(transactions.userId, session.user.id),
-      eq(transactions.status, 'confirmed'),
-      sql`${transactions.createdAt} <= ${endOfMonth}`
+      eq(transactions.status, 'confirmed')
     ))
     .orderBy(desc(transactions.createdAt))
     .limit(limit)
@@ -67,19 +66,36 @@ export default async function TransactionsPage({
         {paginatedTransactions.length === 0 ? (
           <p className="text-slate-400 text-center py-8">Nenhuma transação encontrada.</p>
         ) : (
-          <div className="flex flex-col gap-2">
-            {paginatedTransactions.map((tx) => (
-              <TransactionRow 
-                key={tx.id} 
-                id={tx.id}
-                description={tx.description}
-                amount={parseFloat(tx.amount)}
-                type={tx.type as TransactionType}
-                category={tx.category}
-                date={new Date(tx.createdAt).toLocaleDateString('pt-BR')}
-                categoriesList={userCategories}
-              />
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-neutral-900 text-[10px] uppercase font-bold text-neutral-500 tracking-wider">
+                  <th className="pb-3 px-4">Data</th>
+                  <th className="pb-3 px-4">Estabelecimento / Categoria</th>
+                  <th className="pb-3 px-4">Origem</th>
+                  <th className="pb-3 px-4">Status</th>
+                  <th className="pb-3 px-4 text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedTransactions.map((tx) => (
+                  <TransactionRow 
+                    key={tx.id} 
+                    id={tx.id}
+                    description={tx.description}
+                    amount={parseFloat(tx.amount)}
+                    type={tx.type as TransactionType}
+                    category={tx.category}
+                    date={new Date(tx.createdAt).toLocaleDateString('pt-BR')}
+                    accountId={tx.accountId}
+                    creditCardId={tx.creditCardId}
+                    accountName={tx.accountId ? (userAccounts.find(a => a.id === tx.accountId)?.name) : null}
+                    creditCardName={tx.creditCardId ? (userCards.find(c => c.id === tx.creditCardId)?.name) : null}
+                    categoriesList={userCategories}
+                  />
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 

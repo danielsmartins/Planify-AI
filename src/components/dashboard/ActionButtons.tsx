@@ -41,6 +41,18 @@ export function ActionButtons({ categories, creditCards = [], accounts = [] }: {
     setErrorMsg('');
     const formData = new FormData(e.currentTarget);
     
+    // Extrair forma de pagamento para preencher accountId/creditCardId antes de enviar
+    const paymentMethod = formData.get('paymentMethod') as string | null;
+    if (paymentMethod) {
+      if (paymentMethod.startsWith('account_')) {
+        formData.set('accountId', paymentMethod.replace('account_', ''));
+        formData.set('creditCardId', '');
+      } else if (paymentMethod.startsWith('card_')) {
+        formData.set('creditCardId', paymentMethod.replace('card_', ''));
+        formData.set('accountId', '');
+      }
+    }
+    
     if (type === 'ai') {
       const text = formData.get('ai_text') as string;
       const res = await addTransactionViaAI(text);
@@ -75,7 +87,7 @@ export function ActionButtons({ categories, creditCards = [], accounts = [] }: {
 
   return (
     <>
-      <button onClick={() => { setType('ai'); setIsOpen(true); }} className="bg-gradient-to-r from-purple-500 to-brand hover:from-purple-600 hover:to-brand-dark text-white flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all shadow-[0_0_20px_rgba(139,92,246,0.4)] hover:shadow-[0_0_30px_rgba(139,92,246,0.6)] cursor-pointer">
+      <button onClick={() => { setType('ai'); setIsOpen(true); }} className="bg-brand hover:bg-brand-light text-black flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all border border-brand/20 cursor-pointer">
         <Sparkles size={18} />
         <span>Adicionar com IA</span>
       </button>
@@ -111,7 +123,7 @@ export function ActionButtons({ categories, creditCards = [], accounts = [] }: {
                     <label className="block text-sm text-slate-300 mb-2">Digite o que você gastou ou ganhou:</label>
                     <textarea required name="ai_text" rows={4} className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-white outline-none focus:border-brand transition-colors resize-none" placeholder="Ex: Gastei 45 reais no Ifood com o cartão de crédito..." />
                   </div>
-                  <button disabled={loading} type="submit" className="w-full bg-gradient-to-r from-purple-500 to-brand hover:from-purple-600 hover:to-brand-dark text-white font-medium py-3 rounded-xl mt-2 cursor-pointer disabled:opacity-50">
+                  <button disabled={loading} type="submit" className="w-full bg-brand hover:bg-brand-light text-black font-semibold py-3 rounded-xl mt-2 cursor-pointer disabled:opacity-50">
                     {loading ? 'Analisando e salvando...' : 'Processar com IA'}
                   </button>
                 </>
@@ -145,34 +157,48 @@ export function ActionButtons({ categories, creditCards = [], accounts = [] }: {
                     )}
                   </div>
 
-                  {type === 'expense' && creditCards.length > 0 && (
+                  {type === 'expense' && (
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="block text-sm text-slate-300">Cartão de Crédito (Opcional)</label>
-                        <Link href="/cards" className="text-xs text-brand hover:underline" onClick={resetState}>Gerenciar</Link>
+                        <label className="block text-sm text-slate-300 font-medium">Forma de Pagamento (Pix, Débito ou Crédito)</label>
+                        <div className="flex gap-2">
+                          <Link href="/accounts" className="text-xs text-brand hover:underline" onClick={resetState}>Contas</Link>
+                          <span className="text-xs text-slate-500">•</span>
+                          <Link href="/cards" className="text-xs text-brand hover:underline" onClick={resetState}>Cartões</Link>
+                        </div>
                       </div>
-                      <select name="creditCardId" defaultValue="" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors">
-                        <option value="">Nenhum (Usar Saldo da Conta)</option>
-                        {creditCards.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
+                      <select required name="paymentMethod" defaultValue="" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors">
+                        <option value="" disabled>Selecione onde foi gasto</option>
+                        {accounts.length > 0 && (
+                          <optgroup label="Contas / Carteiras (Débito/Pix)" className="bg-slate-950 text-slate-300">
+                            {accounts.map(a => (
+                              <option key={a.id} value={`account_${a.id}`}>{a.name}</option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {creditCards.length > 0 && (
+                          <optgroup label="Cartões de Crédito" className="bg-slate-950 text-slate-300">
+                            {creditCards.map(c => (
+                              <option key={c.id} value={`card_${c.id}`}>{c.name}</option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                     </div>
                   )}
 
-                  {accounts.length > 0 && (
+                  {type === 'income' && (
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="block text-sm text-slate-300">Conta / Carteira</label>
+                        <label className="block text-sm text-slate-300 font-medium">Conta de Recebimento</label>
                         <Link href="/accounts" className="text-xs text-brand hover:underline" onClick={resetState}>Gerenciar</Link>
                       </div>
-                      <select name="accountId" defaultValue="" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors">
-                        <option value="">Não vincular (Geral)</option>
+                      <select required name="paymentMethod" defaultValue="" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors">
+                        <option value="" disabled>Selecione a conta de destino</option>
                         {accounts.map(a => (
-                          <option key={a.id} value={a.id}>{a.name}</option>
+                          <option key={a.id} value={`account_${a.id}`}>{a.name}</option>
                         ))}
                       </select>
-                      <p className="text-[10px] text-slate-400 mt-1">Se escolher um Cartão de Crédito acima, a conta não será debitada agora.</p>
                     </div>
                   )}
 
@@ -204,7 +230,7 @@ export function ActionButtons({ categories, creditCards = [], accounts = [] }: {
                     </div>
                   )}
 
-                  <button disabled={loading} type="submit" className="w-full bg-brand hover:bg-brand-dark text-white font-medium py-3 rounded-xl mt-4 cursor-pointer disabled:opacity-50">
+                  <button disabled={loading} type="submit" className="w-full bg-brand hover:bg-brand-light text-black font-semibold py-3 rounded-xl mt-4 cursor-pointer disabled:opacity-50">
                     {loading ? 'Salvando...' : 'Salvar Transação'}
                   </button>
                 </>

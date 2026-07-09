@@ -230,7 +230,7 @@ export function SubscriptionClient({
             <button 
               type="submit"
               disabled={isPending}
-              className="w-full mt-4 bg-brand hover:bg-brand-dark text-white font-medium py-3 rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              className="w-full mt-4 bg-brand hover:bg-brand-light text-black font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
             >
               <Plus size={16} />
               {isPending ? 'Salvando...' : 'Adicionar Assinatura'}

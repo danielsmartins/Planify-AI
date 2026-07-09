@@ -14,8 +14,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-[80vh] flex items-center justify-center">
       <div className="glass-panel w-full max-w-md p-8 rounded-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-32 h-32 bg-brand opacity-20 blur-3xl rounded-full" />
-        
         <h2 className="text-3xl font-bold mb-2">Bem-vindo de volta</h2>
         <p className="text-slate-400 mb-8">Acesse o Planify AI para gerenciar suas finanças.</p>
         
@@ -51,14 +49,14 @@ export default function LoginPage() {
           <button 
             type="submit" 
             disabled={pending}
-            className="w-full bg-brand hover:bg-brand-dark text-white font-medium py-3 rounded-xl mt-2 transition-all disabled:opacity-50"
+            className="w-full bg-brand hover:bg-brand-light text-black font-semibold py-3 rounded-xl mt-2 transition-all disabled:opacity-50 cursor-pointer"
           >
             {pending ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
 
         <p className="text-center text-slate-400 text-sm mt-6">
-          Não tem uma conta? <Link href="/register" className="text-brand-light hover:underline">Cadastre-se</Link>
+          Não tem uma conta? <Link href="/register" className="text-white font-semibold hover:underline">Cadastre-se</Link>
         </p>
       </div>
     </div>

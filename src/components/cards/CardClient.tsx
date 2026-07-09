@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { deleteCreditCard, updateCreditCard, addCreditCard } from '@/app/cards/actions';
+import { deleteCreditCard, updateCreditCard, addCreditCard, payCreditCardInvoice } from '@/app/cards/actions';
+import { deleteTransaction } from '@/app/actions';
 import { CreditCard, Trash2, Edit2, Plus, Calendar, X, Upload, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -13,15 +14,49 @@ interface CardProps {
   dueDay: string;
   limitAmount: string | null;
   brand: string;
+  invoiceAmount?: string;
 }
 
-export function CardClient({ cards }: { cards: CardProps[] }) {
+interface AccountProps {
+  id: string;
+  name: string;
+}
+
+interface CardTransactionProps {
+  id: string;
+  amount: string;
+  description: string;
+  category: string;
+  type: string;
+  creditCardId: string | null;
+  accountId: string | null;
+  createdAt: string;
+}
+
+export function CardClient({ 
+  cards, 
+  accounts = [], 
+  transactions = [] 
+}: { 
+  cards: CardProps[], 
+  accounts?: AccountProps[], 
+  transactions?: CardTransactionProps[] 
+}) {
   const [isPending, startTransition] = useTransition();
   const [isAdding, setIsAdding] = useState(false);
   const [editingCard, setEditingCard] = useState<CardProps | null>(null);
 
+  // Card Details Modal State
+  const [viewingCardDetails, setViewingCardDetails] = useState<CardProps | null>(null);
+
+  // Pay Invoice State
+  const [payingCard, setPayingCard] = useState<CardProps | null>(null);
+  const [payAmount, setPayAmount] = useState('');
+  const [payAccountId, setPayAccountId] = useState('');
+  const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0]);
+
   const [formName, setFormName] = useState('');
-  const [formColor, setFormColor] = useState('#8b5cf6');
+  const [formColor, setFormColor] = useState('#10b981');
   const [formBrand, setFormBrand] = useState('mastercard');
 
   // Import Invoice State
@@ -31,6 +66,20 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
   const [importError, setImportError] = useState('');
   
   const router = useRouter();
+
+  const handlePayInvoice = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!payingCard || !payAccountId || !payAmount) return;
+
+    startTransition(() => {
+      payCreditCardInvoice(payingCard.id, payAccountId, parseFloat(payAmount), payDate).then(() => {
+        setPayingCard(null);
+        setPayAmount('');
+        setPayAccountId('');
+        router.refresh();
+      });
+    });
+  };
 
   const CARD_TEMPLATES = [
     { name: 'Nubank', color: '#8A05BE', brand: 'mastercard' },
@@ -126,7 +175,7 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
           
           <button 
             onClick={() => setIsAdding(true)}
-            className="flex items-center gap-2 bg-brand hover:bg-brand-dark text-white px-4 py-2 rounded-xl text-sm font-medium transition-all"
+            className="flex items-center gap-2 bg-brand hover:bg-brand-light text-black px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer"
           >
             <Plus size={16} />
             <span className="hidden sm:inline">Adicionar Cartão</span>
@@ -136,96 +185,143 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {cards.length === 0 ? (
-           <div className="col-span-full glass-panel p-12 text-center rounded-2xl">
-           <CreditCard size={48} className="mx-auto text-slate-700 mb-4" />
-           <p className="text-slate-400 mb-2">Nenhum cartão cadastrado.</p>
-           <p className="text-sm text-slate-500">Cadastre seus cartões para lançar despesas diretamente neles.</p>
-         </div>
+          <div className="col-span-full glass-panel p-12 text-center rounded-2xl">
+            <CreditCard size={48} className="mx-auto text-slate-700 mb-4" />
+            <p className="text-slate-400 mb-2">Nenhum cartão cadastrado.</p>
+            <p className="text-sm text-slate-500">Cadastre seus cartões para lançar despesas diretamente neles.</p>
+          </div>
         ) : (
-          cards.map((card) => (
-            <div key={card.id} className="relative group overflow-hidden rounded-2xl aspect-[1.6/1] p-6 flex flex-col justify-between shadow-xl" style={{ background: `linear-gradient(135deg, ${card.color} 0%, ${card.color}cc 100%)` }}>
-              {/* Efeito de Vidro por cima da cor para ficar premium */}
-              <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] transition-all group-hover:bg-black/30 z-0"></div>
-              
-              {/* Círculos decorativos estilo Mastercard / Layout de Cartão */}
-              <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
-              <div className="absolute -bottom-8 -left-8 w-24 h-24 bg-black/20 rounded-full blur-xl pointer-events-none"></div>
-              
-              <div className="relative z-10 flex justify-between items-start">
-                <div className="flex items-center gap-2">
-                  <CreditCard className="text-white/80" />
-                  <span className="font-bold text-white tracking-wide">{card.name}</span>
-                </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
-                  <button 
-                    onClick={() => {
-                      setEditingCard(card);
-                      setFormName(card.name);
-                      setFormColor(card.color);
-                      setFormBrand(card.brand || 'mastercard');
-                    }}
-                    className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors backdrop-blur-md"
-                  >
-                    <Edit2 size={14} />
-                  </button>
-                  <button 
-                    onClick={() => handleDelete(card.id)}
-                    className="p-2 bg-rose-500/80 hover:bg-rose-500 text-white rounded-lg transition-colors backdrop-blur-md"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
+          cards.map((card) => {
+            const now = new Date();
+            const closingDate = new Date(now.getFullYear(), now.getMonth() + 1, parseInt(card.closingDay));
+            const dueDate = new Date(now.getFullYear(), now.getMonth() + 1, parseInt(card.dueDay));
+            const formatDayMonth = (d: Date) => {
+              const day = d.getDate().toString().padStart(2, '0');
+              const month = (d.getMonth() + 1).toString().padStart(2, '0');
+              return `${day}/${month}`;
+            };
+            const closingFormatted = formatDayMonth(closingDate);
+            const dueFormatted = formatDayMonth(dueDate);
 
-              <div className="relative z-10 mt-auto mb-4">
-                 {/* Estilo de chip metálico simulado e número oculto */}
-                 <div className="flex justify-between items-center opacity-70">
-                    <div className="w-10 h-7 rounded bg-gradient-to-br from-slate-200 to-slate-400 border border-slate-100/50 opacity-90 shadow-sm"></div>
-                    <div className="flex gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-white/70"></span>
-                      <span className="w-1.5 h-1.5 rounded-full bg-white/70"></span>
-                      <span className="w-1.5 h-1.5 rounded-full bg-white/70"></span>
-                      <span className="w-1.5 h-1.5 rounded-full bg-white/70"></span>
-                    </div>
-                 </div>
-              </div>
-
-              <div className="relative z-10 flex items-end justify-between">
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-white/60 uppercase tracking-wider">Fechamento</span>
-                      <span className="text-white font-medium text-sm flex items-center gap-1"><Calendar size={12}/> Dia {card.closingDay}</span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-white/60 uppercase tracking-wider">Vencimento</span>
-                      <span className="text-white font-medium text-sm flex items-center gap-1"><Calendar size={12}/> Dia {card.dueDay}</span>
-                    </div>
+            return (
+              <div 
+                key={card.id} 
+                onClick={() => setViewingCardDetails(card)}
+                className="relative group overflow-hidden rounded-2xl aspect-[1.6/1] p-6 flex flex-col justify-between shadow-xl cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all duration-300" 
+                style={{ background: `linear-gradient(135deg, ${card.color} 0%, ${card.color}cc 100%)` }}
+              >
+                {/* Efeito de Vidro por cima da cor para ficar premium */}
+                <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] transition-all group-hover:bg-black/30 z-0"></div>
+                
+                {/* Círculos decorativos estilo Mastercard / Layout de Cartão */}
+                <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+                <div className="absolute -bottom-8 -left-8 w-24 h-24 bg-black/20 rounded-full blur-xl pointer-events-none"></div>
+                
+                <div className="relative z-10 flex justify-between items-start">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="text-white/80" />
+                    <span className="font-bold text-white tracking-wide">{card.name}</span>
                   </div>
-                  {Number(card.limitAmount) > 0 && (
-                    <div className="mt-2">
-                       <span className="text-[10px] text-white/60 uppercase tracking-wider">Limite</span>
-                       <p className="text-white font-semibold">{formatBRL(card.limitAmount!)}</p>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingCard(card);
+                        setFormName(card.name);
+                        setFormColor(card.color);
+                        setFormBrand(card.brand || 'mastercard');
+                      }}
+                      className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors backdrop-blur-md cursor-pointer"
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(card.id);
+                      }}
+                      className="p-2 bg-rose-500/80 hover:bg-rose-500 text-white rounded-lg transition-colors backdrop-blur-md cursor-pointer"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="relative z-10 mt-auto mb-4">
+                   {/* Estilo de chip metálico simulado e número oculto */}
+                   <div className="flex justify-between items-center opacity-70">
+                      <div className="w-10 h-7 rounded bg-gradient-to-br from-slate-200 to-slate-400 border border-slate-100/50 opacity-90 shadow-sm"></div>
+                      <div className="flex gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/70"></span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/70"></span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/70"></span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/70"></span>
+                      </div>
+                   </div>
+                </div>
+
+                <div className="relative z-10 flex items-end justify-between gap-2">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-4 mb-2">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-white/70 uppercase tracking-wider font-semibold">Fechamento</span>
+                        <span className="text-white font-semibold text-sm flex items-center gap-1"><Calendar size={12}/> {closingFormatted}</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-white/70 uppercase tracking-wider font-semibold">Vencimento</span>
+                        <span className="text-white font-semibold text-sm flex items-center gap-1"><Calendar size={12}/> {dueFormatted}</span>
+                      </div>
                     </div>
-                  )}
+                    
+                    <div className="flex flex-wrap items-end gap-4 mt-2">
+                    {card.invoiceAmount && parseFloat(card.invoiceAmount) > 0 && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-white/70 uppercase tracking-wider font-semibold">Fatura Atual</span>
+                        <p className="text-white font-extrabold text-base leading-tight">{formatBRL(card.invoiceAmount)}</p>
+                      </div>
+                    )}
+                    {Number(card.limitAmount) > 0 && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-white/70 uppercase tracking-wider font-semibold">Limite</span>
+                        <p className="text-white/90 font-semibold text-xs leading-tight">{formatBRL(card.limitAmount!)}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 
-                {/* Brand Logo Text */}
-                <div className="text-white/70 font-bold italic tracking-wider text-xl uppercase opacity-80" style={{ fontFamily: 'sans-serif' }}>
-                  {card.brand === 'mastercard' && (
-                    <div className="flex">
-                      <div className="w-6 h-6 rounded-full bg-white/40 -mr-2"></div>
-                      <div className="w-6 h-6 rounded-full bg-white/20 backdrop-blur-md"></div>
-                    </div>
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  {/* Brand Logo Text */}
+                  <div className="text-white/80 font-bold italic tracking-wider text-xl uppercase opacity-90" style={{ fontFamily: 'sans-serif' }}>
+                    {card.brand === 'mastercard' && (
+                      <div className="flex">
+                        <div className="w-6 h-6 rounded-full bg-white/40 -mr-2"></div>
+                        <div className="w-6 h-6 rounded-full bg-white/20 backdrop-blur-md"></div>
+                      </div>
+                    )}
+                    {card.brand === 'visa' && <span>VISA</span>}
+                    {card.brand === 'elo' && <span>elo</span>}
+                    {card.brand === 'amex' && <span className="text-sm border border-white/50 px-1 rounded-sm">AMEX</span>}
+                  </div>
+
+                  {card.invoiceAmount && parseFloat(card.invoiceAmount) > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPayingCard(card);
+                        setPayAmount(card.invoiceAmount!);
+                        if (accounts.length > 0) setPayAccountId(accounts[0].id);
+                      }}
+                      className="bg-white hover:bg-white/90 text-black px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md select-none z-10"
+                    >
+                      Pagar Fatura
+                    </button>
                   )}
-                  {card.brand === 'visa' && <span>VISA</span>}
-                  {card.brand === 'elo' && <span>elo</span>}
-                  {card.brand === 'amex' && <span className="text-sm border border-white/50 px-1 rounded-sm">AMEX</span>}
                 </div>
               </div>
             </div>
-          ))
-        )}
+          );
+        }))
+      }
       </div>
 
       {/* Modal Adicionar / Editar */}
@@ -233,7 +329,7 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md relative animate-in fade-in zoom-in duration-200">
             <button 
-              onClick={() => { setIsAdding(false); setEditingCard(null); setFormName(''); setFormColor('#8b5cf6'); setFormBrand('mastercard'); }} 
+              onClick={() => { setIsAdding(false); setEditingCard(null); setFormName(''); setFormColor('#10b981'); setFormBrand('mastercard'); }} 
               className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
             >
               <X size={20}/>
@@ -339,7 +435,7 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
               <button 
                 type="submit"
                 disabled={isPending}
-                className="w-full mt-4 bg-brand hover:bg-brand-dark text-white font-medium py-3 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
+                className="w-full mt-4 bg-brand hover:bg-brand-light text-black font-semibold py-3 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
               >
                 {isPending ? 'Salvando...' : 'Salvar Cartão'}
               </button>
@@ -403,7 +499,7 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
               <button 
                 type="submit"
                 disabled={importLoading || cards.length === 0}
-                className="w-full mt-2 bg-gradient-to-r from-purple-500 to-brand hover:from-purple-600 hover:to-brand-dark text-white font-medium py-3 rounded-xl transition-all disabled:opacity-50 cursor-pointer flex justify-center items-center gap-2 shadow-[0_0_15px_rgba(139,92,246,0.3)]"
+                className="w-full mt-2 bg-brand hover:bg-brand-light text-black font-semibold py-3 rounded-xl transition-all border border-brand/20 disabled:opacity-50 cursor-pointer flex justify-center items-center gap-2"
               >
                 {importLoading ? 'A IA está lendo o PDF...' : 'Extrair Transações'}
               </button>
@@ -411,6 +507,279 @@ export function CardClient({ cards }: { cards: CardProps[] }) {
           </div>
         </div>
       )}
+
+      {/* Modal de Pagamento de Fatura */}
+      {payingCard && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass-panel p-6 rounded-2xl w-full max-w-md relative animate-in fade-in zoom-in duration-200">
+            <button 
+              onClick={() => { setPayingCard(null); setPayAmount(''); setPayAccountId(''); }} 
+              className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
+            >
+              <X size={20}/>
+            </button>
+            <h2 className="text-xl font-bold mb-2">Pagar Fatura</h2>
+            <p className="text-xs text-slate-400 mb-6">Pague a fatura do cartão {payingCard.name} com o saldo de uma conta bancária.</p>
+
+            <form onSubmit={handlePayInvoice} className="flex flex-col gap-4">
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Valor do Pagamento (R$)</label>
+                <input 
+                  required 
+                  type="number" 
+                  step="0.01" 
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(e.target.value)}
+                  className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors text-sm" 
+                  placeholder="0.00" 
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Conta de Origem (Pix/Débito)</label>
+                <select 
+                  required
+                  value={payAccountId}
+                  onChange={(e) => setPayAccountId(e.target.value)}
+                  className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors text-sm"
+                >
+                  <option value="" disabled>Selecione a conta pagadora...</option>
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Data do Pagamento</label>
+                <input 
+                  required
+                  type="date" 
+                  value={payDate}
+                  onChange={(e) => setPayDate(e.target.value)}
+                  className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors text-sm" 
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={isPending || accounts.length === 0}
+                className="w-full bg-brand hover:bg-brand-light text-black font-semibold py-3 rounded-xl mt-4 cursor-pointer disabled:opacity-50 transition-colors"
+              >
+                {isPending ? 'Confirmando...' : 'Confirmar Pagamento'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Detalhes do Cartão */}
+      {viewingCardDetails && (() => {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        // Função auxiliar para calcular datas de fatura (vencimento e fechamento)
+        const getTxInvoiceDates = (createdAtStr: string, closingDayStr: string, dueDayStr: string) => {
+          const txDate = new Date(createdAtStr);
+          const closingDay = parseInt(closingDayStr);
+          const dueDay = parseInt(dueDayStr);
+          
+          let invoiceMonth = txDate.getMonth();
+          let invoiceYear = txDate.getFullYear();
+          
+          // Se o dia do mês da transação for antes do fechamento, pertence ao ciclo da fatura do mês anterior
+          if (txDate.getDate() < closingDay) {
+            invoiceMonth -= 1;
+            if (invoiceMonth < 0) {
+              invoiceMonth = 11;
+              invoiceYear -= 1;
+            }
+          }
+          
+          // Vencimento e fechamento caem no mês seguinte (invoiceMonth + 1)
+          const closingDate = new Date(invoiceYear, invoiceMonth + 1, closingDay);
+          const dueDate = new Date(invoiceYear, invoiceMonth + 1, dueDay);
+          
+          const format = (d: Date) => {
+            const day = d.getDate().toString().padStart(2, '0');
+            const month = (d.getMonth() + 1).toString().padStart(2, '0');
+            return `${day}/${month}`;
+          };
+          
+          const monthName = new Date(invoiceYear, invoiceMonth, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+          
+          return {
+            monthName,
+            closing: format(closingDate),
+            due: format(dueDate)
+          };
+        };
+
+        // Datas da fatura atual
+        const currentInvoiceDates = getTxInvoiceDates(now.toISOString(), viewingCardDetails.closingDay, viewingCardDetails.dueDay);
+
+        // Filtrar transações deste cartão
+        const cardTxs = transactions.filter(t => t.creditCardId === viewingCardDetails.id);
+        
+        // Transações da fatura atual (mês atual)
+        const currentInvoiceTxs = cardTxs.filter(t => {
+          const tDate = new Date(t.createdAt);
+          return tDate >= startOfMonth && tDate <= endOfMonth;
+        });
+
+        // Transações futuras (meses futuros)
+        const futureInvoiceTxs = cardTxs.filter(t => {
+          const tDate = new Date(t.createdAt);
+          return tDate > endOfMonth;
+        });
+
+        const currentInvoiceTotal = currentInvoiceTxs.filter(t => !t.accountId).reduce((sum, t) => sum + parseFloat(t.amount), 0) - currentInvoiceTxs.filter(t => t.accountId).reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-[#0b0c10] border border-slate-800 p-6 rounded-2xl w-full max-w-2xl relative animate-in fade-in zoom-in duration-200 flex flex-col max-h-[85vh] overflow-hidden shadow-2xl">
+              <button 
+                onClick={() => setViewingCardDetails(null)} 
+                className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer z-10"
+              >
+                <X size={20}/>
+              </button>
+              
+              <div className="mb-6">
+                <div className="flex items-center gap-2.5 mb-1.5">
+                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: viewingCardDetails.color }}></div>
+                  <h2 className="text-2xl font-bold text-white">{viewingCardDetails.name}</h2>
+                </div>
+                <p className="text-sm text-slate-400">Detalhamento dos lançamentos confirmados e faturas deste cartão.</p>
+              </div>
+
+              <div className="overflow-y-auto pr-1 flex-1 space-y-6">
+                {/* Resumo da Fatura Atual */}
+                <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-5 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                  <div>
+                    <span className="text-xs text-slate-400 uppercase tracking-wider block font-semibold">Fatura de {now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</span>
+                    <p className="text-3xl font-extrabold text-white mt-1">{formatBRL(currentInvoiceTotal > 0 ? currentInvoiceTotal : 0)}</p>
+                    <span className="text-xs text-slate-500 block mt-1.5">Vencimento: {currentInvoiceDates.due} (Fechamento: {currentInvoiceDates.closing})</span>
+                  </div>
+                  {currentInvoiceTotal > 0 && (
+                    <button
+                      onClick={() => {
+                        setPayingCard(viewingCardDetails);
+                        setPayAmount(currentInvoiceTotal.toString());
+                        if (accounts.length > 0) setPayAccountId(accounts[0].id);
+                        setViewingCardDetails(null);
+                      }}
+                      className="bg-white hover:bg-white/90 text-black px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md select-none shrink-0"
+                    >
+                      Pagar Fatura
+                    </button>
+                  )}
+                </div>
+
+                {/* Compras na Fatura Atual */}
+                <div>
+                  <h3 className="text-base font-bold text-slate-200 mb-3 flex items-center justify-between">
+                    <span>Lançamentos na Fatura Atual</span>
+                    <span className="text-xs text-slate-500 font-normal">{currentInvoiceTxs.length} item(ns)</span>
+                  </h3>
+                  {currentInvoiceTxs.length === 0 ? (
+                    <p className="text-sm text-slate-500 py-6 text-center italic border border-dashed border-slate-800/60 rounded-xl bg-slate-900/10">Nenhum lançamento nesta fatura.</p>
+                  ) : (
+                    <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/10 divide-y divide-slate-800">
+                      {currentInvoiceTxs.map(t => {
+                        const dates = getTxInvoiceDates(t.createdAt, viewingCardDetails.closingDay, viewingCardDetails.dueDay);
+                        return (
+                          <div key={t.id} className="p-3.5 flex justify-between items-center text-sm group/item">
+                            <div>
+                              <p className="font-semibold text-slate-200">{t.description}</p>
+                              <p className="text-xs text-slate-500 mt-1">
+                                {t.category} • Vencimento: {dates.due} (Fechamento: {dates.closing})
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className={`font-bold text-sm ${t.accountId ? 'text-emerald-400' : 'text-slate-100'}`}>
+                                {t.accountId ? '+' : '-'}{formatBRL(t.amount)}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Tem certeza que deseja excluir a transação "${t.description}"?`)) {
+                                    startTransition(() => {
+                                      deleteTransaction(t.id).then(() => {
+                                        router.refresh();
+                                        setViewingCardDetails(null);
+                                      });
+                                    });
+                                  }
+                                }}
+                                disabled={isPending}
+                                className="p-1.5 text-slate-600 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition-all opacity-0 group-hover/item:opacity-100 focus:opacity-100 cursor-pointer disabled:opacity-50"
+                                title="Excluir Transação"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Compras em Faturas Futuras */}
+                <div>
+                  <h3 className="text-base font-bold text-slate-200 mb-3 flex items-center justify-between">
+                    <span>Lançamentos Futuros (A vencer nos próximos meses)</span>
+                    <span className="text-xs text-slate-500 font-normal">
+                      {futureInvoiceTxs.length} parcelas / compras
+                    </span>
+                  </h3>
+                  {futureInvoiceTxs.length === 0 ? (
+                    <p className="text-sm text-slate-500 py-6 text-center italic border border-dashed border-slate-800/60 rounded-xl bg-slate-900/10">Nenhum lançamento futuro pendente.</p>
+                  ) : (
+                    <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/10 divide-y divide-slate-800 max-h-[220px] overflow-y-auto font-sans">
+                      {futureInvoiceTxs.map(t => {
+                        const dates = getTxInvoiceDates(t.createdAt, viewingCardDetails.closingDay, viewingCardDetails.dueDay);
+                        return (
+                          <div key={t.id} className="p-3.5 flex justify-between items-center text-sm opacity-80 hover:opacity-100 transition-opacity group/item">
+                            <div>
+                              <p className="font-semibold text-slate-300">{t.description}</p>
+                              <p className="text-xs text-slate-500 mt-1">
+                                {t.category} • Vencimento: {dates.due} (Fechamento: {dates.closing})
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="font-bold text-slate-300 text-sm">
+                                -{formatBRL(t.amount)}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Tem certeza que deseja excluir a transação "${t.description}"?`)) {
+                                    startTransition(() => {
+                                      deleteTransaction(t.id).then(() => {
+                                        router.refresh();
+                                        setViewingCardDetails(null);
+                                      });
+                                    });
+                                  }
+                                }}
+                                disabled={isPending}
+                                className="p-1.5 text-slate-600 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition-all opacity-0 group-hover/item:opacity-100 focus:opacity-100 cursor-pointer disabled:opacity-50"
+                                title="Excluir Transação"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 }

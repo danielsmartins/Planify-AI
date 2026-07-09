@@ -29,11 +29,11 @@ export function AiAdvisor() {
   return (
     <div className="glass-panel p-6 rounded-2xl relative overflow-hidden group">
       {/* Background Glow */}
-      <div className="absolute top-0 right-0 -mr-16 -mt-16 w-32 h-32 bg-purple-500/20 blur-3xl rounded-full transition-all group-hover:bg-purple-500/30"></div>
+      <div className="absolute top-0 right-0 -mr-16 -mt-16 w-32 h-32 bg-brand/10 blur-3xl rounded-full transition-all group-hover:bg-brand/20"></div>
       
       <div className="relative z-10">
         <div className="flex items-center gap-2 mb-4">
-          <div className="p-2 bg-purple-500/10 text-purple-400 rounded-lg">
+          <div className="p-2 bg-brand/10 text-brand rounded-lg">
             <Bot size={20} />
           </div>
           <h3 className="text-lg font-bold">Consultor IA</h3>
@@ -41,13 +41,13 @@ export function AiAdvisor() {
 
         {insight ? (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-            <p className="text-sm text-slate-300 leading-relaxed bg-slate-800/40 p-4 rounded-xl border border-purple-500/10">
+            <p className="text-sm text-slate-300 leading-relaxed bg-slate-800/40 p-4 rounded-xl border border-brand/10">
               &quot;{insight}&quot;
             </p>
             <button 
               onClick={generateInsight}
               disabled={loading}
-              className="mt-4 text-xs font-medium text-purple-400 hover:text-purple-300 flex items-center gap-1 transition-colors"
+              className="mt-4 text-xs font-medium text-brand hover:text-brand-light flex items-center gap-1 transition-colors"
             >
               {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
               Gerar novo insight
@@ -61,7 +61,7 @@ export function AiAdvisor() {
             <button
               onClick={generateInsight}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-2.5 px-4 rounded-xl font-medium transition-all shadow-lg shadow-purple-900/20 active:scale-[0.98] disabled:opacity-70"
+              className="w-full flex items-center justify-center gap-2 bg-brand hover:bg-brand-light text-black py-2.5 px-4 rounded-xl font-semibold transition-all border border-brand/20 active:scale-[0.98] disabled:opacity-70 cursor-pointer"
             >
               {loading ? (
                 <>

@@ -19,11 +19,13 @@ interface InstallmentProps {
 export function InstallmentClient({ 
   installments, 
   categories, 
-  creditCards 
+  creditCards,
+  accounts = []
 }: { 
   installments: InstallmentProps[],
   categories: { id: string, name: string }[],
-  creditCards: { id: string, name: string }[]
+  creditCards: { id: string, name: string }[],
+  accounts?: { id: string, name: string }[]
 }) {
   const [isPending, startTransition] = useTransition();
   const [editingInstallment, setEditingInstallment] = useState<InstallmentProps | null>(null);
@@ -55,6 +57,18 @@ export function InstallmentClient({
     setAddError('');
     const formData = new FormData(e.currentTarget);
     
+    // Extrair forma de pagamento para preencher accountId/creditCardId antes de enviar
+    const paymentMethod = formData.get('paymentMethod') as string | null;
+    if (paymentMethod) {
+      if (paymentMethod.startsWith('account_')) {
+        formData.set('accountId', paymentMethod.replace('account_', ''));
+        formData.set('creditCardId', '');
+      } else if (paymentMethod.startsWith('card_')) {
+        formData.set('creditCardId', paymentMethod.replace('card_', ''));
+        formData.set('accountId', '');
+      }
+    }
+    
     startTransition(async () => {
       const res = await createInstallmentPurchase(formData);
       if (res?.error) {
@@ -80,7 +94,7 @@ export function InstallmentClient({
         <div /> {/* Espaçador para manter o botão à direita, o título está na page */}
         <button 
           onClick={() => setIsAdding(true)} 
-          className="bg-brand hover:bg-brand-dark text-white flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer"
+          className="bg-brand hover:bg-brand-light text-black flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer"
         >
           <Plus size={18} />
           <span>Nova Compra</span>
@@ -214,7 +228,7 @@ export function InstallmentClient({
               <button 
                 type="submit"
                 disabled={isPending}
-                className="w-full mt-4 bg-brand hover:bg-brand-dark text-white font-medium py-3 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
+                className="w-full mt-4 bg-brand hover:bg-brand-light text-black font-semibold py-3 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
               >
                 {isPending ? 'Salvando...' : 'Salvar Alterações'}
               </button>
@@ -265,17 +279,26 @@ export function InstallmentClient({
                 )}
               </div>
 
-              {creditCards.length > 0 && (
-                <div>
-                  <label className="block text-sm text-slate-300 mb-1">Cartão de Crédito (Opcional)</label>
-                  <select name="creditCardId" defaultValue="" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors">
-                    <option value="">Nenhum (Débito/Dinheiro)</option>
-                    {creditCards.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Forma de Pagamento (Pix, Débito ou Crédito)</label>
+                <select required name="paymentMethod" defaultValue="" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors">
+                  <option value="" disabled>Selecione onde será cobrado</option>
+                  {accounts.length > 0 && (
+                    <optgroup label="Contas / Carteiras (Débito/Pix)" className="bg-slate-950 text-slate-300">
+                      {accounts.map(a => (
+                        <option key={a.id} value={`account_${a.id}`}>{a.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {creditCards.length > 0 && (
+                    <optgroup label="Cartões de Crédito" className="bg-slate-950 text-slate-300">
+                      {creditCards.map(c => (
+                        <option key={c.id} value={`card_${c.id}`}>{c.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -288,7 +311,7 @@ export function InstallmentClient({
                 </div>
               </div>
 
-              <button disabled={isPending} type="submit" className="w-full bg-brand hover:bg-brand-dark text-white font-medium py-3 rounded-xl mt-4 cursor-pointer disabled:opacity-50">
+              <button disabled={isPending} type="submit" className="w-full bg-brand hover:bg-brand-light text-black font-semibold py-3 rounded-xl mt-4 cursor-pointer disabled:opacity-50">
                 {isPending ? 'Salvando...' : 'Adicionar Compra'}
               </button>
             </form>

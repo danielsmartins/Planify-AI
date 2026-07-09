@@ -13,15 +13,18 @@ export interface ExtractedData {
   currentInstallment?: number;
 }
 
-export async function extractFinancialData(text: string, existingCategories: string[] = []): Promise<ExtractedData | null> {
+export async function extractFinancialData(
+  text: string, 
+  existingCategories: string[] = [],
+  audioData?: { base64: string; mimeType: string }
+): Promise<ExtractedData | null> {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash", generationConfig: { responseMimeType: "application/json" } });
 
-    const prompt = `
+    let prompt = `
 Você é um assistente financeiro inteligente.
-O usuário enviou a seguinte mensagem no WhatsApp/Telegram: "${text}"
 
-Sua tarefa é extrair os seguintes dados financeiros dessa mensagem e retorná-los.
+Sua tarefa é extrair os seguintes dados financeiros da mensagem (áudio ou texto) enviada pelo usuário e retorná-los.
 
 Formato esperado:
 {
@@ -42,7 +45,24 @@ Regras:
 3. Se for parcelado, MAS o usuário der APENAS o valor TOTAL, divida o valor total pelas parcelas para preencher o "amount". Ex: "TV de 2000 em 10x" -> amount = 200, isInstallment = true, installmentsCount = 10. Se ele falar "uma tv em 10 parcelas de 200", o amount já é 200.
 `;
 
-    const result = await model.generateContent(prompt);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contentInput: any[] = [];
+    
+    if (audioData) {
+      contentInput.push({
+        inlineData: {
+          data: audioData.base64,
+          mimeType: audioData.mimeType
+        }
+      });
+      prompt += `\nO usuário enviou um áudio gravado. Escute o áudio com atenção e extraia a transação descrita na fala do usuário.`;
+    } else {
+      prompt += `\nO usuário enviou a seguinte mensagem de texto no WhatsApp/Telegram: "${text}"`;
+    }
+
+    contentInput.push(prompt);
+
+    const result = await model.generateContent(contentInput);
     const responseText = result.response.text().trim();
     
     if (!responseText || responseText === 'null') return null;

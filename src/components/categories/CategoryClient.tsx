@@ -214,7 +214,7 @@ export function CategoryClient({ categories, budgetData }: { categories: Categor
               <button 
                 type="submit"
                 disabled={isPending}
-                className="w-full mt-4 bg-brand hover:bg-brand-dark text-white font-medium py-3 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
+                className="w-full mt-4 bg-brand hover:bg-brand-light text-black font-semibold py-3 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
               >
                 {isPending ? 'Salvando...' : 'Salvar Alterações'}
               </button>

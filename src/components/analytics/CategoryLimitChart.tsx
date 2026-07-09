@@ -96,7 +96,7 @@ export function CategoryLimitChart({ data }: CategoryLimitChartProps) {
               <Bar 
                 dataKey="spent" 
                 name="Gasto Atual" 
-                fill="#8b5cf6" 
+                fill="#10b981" 
                 radius={[4, 4, 0, 0]} 
               />
               <Bar 

@@ -41,17 +41,34 @@ export async function createTransaction(formData: FormData) {
     return { error: 'Preencha todos os campos.' };
   }
 
+  // Validações obrigatórias impostas a partir de contas e carteiras
+  if (type === 'income') {
+    if (!accountId) {
+      return { error: 'Uma receita (ganho) deve sempre estar atrelada a uma conta.' };
+    }
+    if (creditCardId) {
+      return { error: 'Uma receita não pode ser lançada em um cartão de crédito.' };
+    }
+  } else if (type === 'expense') {
+    if (!accountId && !creditCardId) {
+      return { error: 'Uma despesa (gasto) deve estar atrelada a uma conta ou a um cartão de crédito.' };
+    }
+  }
+
   let txDate = new Date();
   const parsedAmount = parseFloat(amount);
 
-  if (creditCardId) {
+  // Se for despesa no cartão de crédito E não tiver conta vinculada (gasto normal no crédito)
+  if (creditCardId && !accountId) {
     const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, creditCardId));
     if (cardRes.length > 0) {
       const card = cardRes[0];
       txDate = calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
     }
-  } else if (accountId) {
-    // Atualizar saldo da conta se não for cartão de crédito
+  }
+
+  // Se houver conta associada (Receita, Despesa direta ou Pagamento de fatura de cartão)
+  if (accountId) {
     const accRes = await db.select().from(accounts).where(and(eq(accounts.id, accountId), eq(accounts.userId, session.user.id)));
     if (accRes.length > 0) {
       const acc = accRes[0];
@@ -71,7 +88,7 @@ export async function createTransaction(formData: FormData) {
     category: category,
     type: type,
     creditCardId: creditCardId || null,
-    accountId: (!creditCardId && accountId) ? accountId : null,
+    accountId: accountId || null,
     createdAt: txDate
   });
 
@@ -89,12 +106,60 @@ export async function addTransactionViaAI(text: string) {
     const extractedData = await extractFinancialData(text);
     if (!extractedData) return { error: 'Não consegui entender a transação. Tente ser mais claro, ex: "Uber 25 reais".' };
 
+    // Buscar contas e cartões para associação automática
+    const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, session.user.id));
+    const userCards = await db.select().from(creditCards).where(eq(creditCards.userId, session.user.id));
+
+    let accountId: string | null = null;
+    let creditCardId: string | null = null;
+    const parsedAmount = extractedData.amount;
+
+    if (extractedData.type === 'income') {
+      if (userAccounts.length === 0) {
+        return { error: 'Você precisa ter pelo menos uma conta cadastrada para registrar receitas.' };
+      }
+      accountId = userAccounts[0].id;
+    } else {
+      // É despesa
+      const isCredit = text.toLowerCase().includes('crédito') || text.toLowerCase().includes('cartão') || extractedData.isInstallment;
+      if (isCredit && userCards.length > 0) {
+        creditCardId = userCards[0].id;
+      } else if (userAccounts.length > 0) {
+        accountId = userAccounts[0].id;
+      } else if (userCards.length > 0) {
+        creditCardId = userCards[0].id;
+      } else {
+        return { error: 'Você precisa cadastrar pelo menos uma conta ou cartão de crédito para registrar despesas.' };
+      }
+    }
+
+    // Se associou a uma conta, atualiza o saldo
+    if (accountId) {
+      const acc = userAccounts.find(a => a.id === accountId);
+      if (acc) {
+        const currentBalance = parseFloat(acc.balance);
+        const newBalance = extractedData.type === 'income' ? currentBalance + parsedAmount : currentBalance - parsedAmount;
+        await db.update(accounts).set({ balance: newBalance.toString() }).where(eq(accounts.id, accountId));
+      }
+    }
+
+    let txDate = new Date();
+    if (creditCardId && !accountId) {
+      const card = userCards.find(c => c.id === creditCardId);
+      if (card) {
+        txDate = calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
+      }
+    }
+
     await db.insert(transactions).values({
       userId: session.user.id,
       amount: extractedData.amount.toString(),
       description: extractedData.description,
       category: extractedData.category,
       type: extractedData.type as "income" | "expense",
+      accountId,
+      creditCardId,
+      createdAt: txDate
     });
 
     revalidatePath('/');
@@ -179,6 +244,7 @@ export async function createInstallmentPurchase(formData: FormData) {
   const installmentsCount = parseInt(formData.get('installmentsCount') as string);
   const currentInstallment = parseInt(formData.get('currentInstallment') as string);
   const creditCardId = formData.get('creditCardId') as string | null;
+  const accountId = formData.get('accountId') as string | null;
 
   if (!description || isNaN(installmentAmount) || !category || isNaN(installmentsCount) || isNaN(currentInstallment)) {
     return { error: 'Preencha todos os campos corretamente.' };
@@ -211,6 +277,17 @@ export async function createInstallmentPurchase(formData: FormData) {
     }
   }
 
+  // Se houver conta associada, desconta o valor da parcela atual do saldo da conta
+  if (accountId) {
+    const accRes = await db.select().from(accounts).where(and(eq(accounts.id, accountId), eq(accounts.userId, session.user.id)));
+    if (accRes.length > 0) {
+      const acc = accRes[0];
+      const currentBalance = parseFloat(acc.balance);
+      const newBalance = currentBalance - installmentAmount;
+      await db.update(accounts).set({ balance: newBalance.toString() }).where(eq(accounts.id, acc.id));
+    }
+  }
+
   // Generate transactions for the remaining installments
   const txValues = [];
   const now = new Date();
@@ -220,10 +297,14 @@ export async function createInstallmentPurchase(formData: FormData) {
     const baseDate = new Date(now);
     baseDate.setMonth(now.getMonth() + (i - currentInstallment));
     
-    // Se tiver cartao de credito, aplica a logica de vencimento
     let txDate = baseDate;
     if (cardClosingDay > 0 && cardDueDay > 0) {
-      txDate = calculateCreditCardDate(baseDate, cardClosingDay, cardDueDay);
+      // Para parcelamentos em andamento, o primeiro item (i = currentInstallment) deve cair no vencimento do mês atual
+      // Os itens subsequentes caem nos meses subsequentes
+      const targetDate = new Date(now);
+      targetDate.setMonth(now.getMonth() + (i - currentInstallment));
+      targetDate.setDate(cardDueDay);
+      txDate = targetDate;
     }
     
     txValues.push({
@@ -234,6 +315,7 @@ export async function createInstallmentPurchase(formData: FormData) {
       type: 'expense' as const,
       installmentId: installment.id,
       creditCardId: creditCardId || null,
+      accountId: accountId || null,
       createdAt: txDate,
     });
   }

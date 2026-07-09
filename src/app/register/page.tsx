@@ -14,8 +14,6 @@ export default function RegisterPage() {
   return (
     <div className="min-h-[80vh] flex items-center justify-center py-10">
       <div className="glass-panel w-full max-w-md p-8 rounded-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-32 h-32 bg-brand opacity-20 blur-3xl rounded-full" />
-        
         <h2 className="text-3xl font-bold mb-2">Crie sua conta</h2>
         <p className="text-slate-400 mb-8">Junte-se ao Planify AI.</p>
         
@@ -72,14 +70,14 @@ export default function RegisterPage() {
           <button 
             type="submit" 
             disabled={pending}
-            className="w-full bg-brand hover:bg-brand-dark text-white font-medium py-3 rounded-xl mt-2 transition-all disabled:opacity-50"
+            className="w-full bg-brand hover:bg-brand-light text-black font-semibold py-3 rounded-xl mt-2 transition-all disabled:opacity-50 cursor-pointer"
           >
             {pending ? 'Cadastrando...' : 'Criar Conta'}
           </button>
         </form>
 
         <p className="text-center text-slate-400 text-sm mt-6">
-          Já tem conta? <Link href="/login" className="text-brand-light hover:underline">Entrar</Link>
+          Já tem conta? <Link href="/login" className="text-white font-semibold hover:underline">Entrar</Link>
         </p>
       </div>
     </div>
