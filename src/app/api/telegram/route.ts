@@ -658,12 +658,15 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
     console.error("Telegram Webhook Error:", error);
     if (chatId) {
       try {
-        await sendTelegramMessage(chatId, "⚠️ Desculpe, ocorreu um erro inesperado ao processar sua solicitação.");
+        const errMsg = error instanceof Error ? error.message : String(error);
+        const errStack = error instanceof Error && error.stack ? error.stack.split("\n").slice(0, 3).join("\n") : "";
+        await sendTelegramMessage(chatId, `⚠️ Desculpe, ocorreu um erro inesperado ao processar sua solicitação.\n\n*Erro:* \`${errMsg}\`\n\`\`\`\n${errStack}\n\`\`\``);
       } catch (sendError) {
         console.error("Failed to send error message to Telegram:", sendError);
       }
     }
-    return new NextResponse('Internal Error', { status: 500 });
+    // Retornamos 200 (ok) para evitar que o Telegram envie a mesma mensagem em loop
+    return NextResponse.json({ status: "Error handled" });
   }
 }
 
