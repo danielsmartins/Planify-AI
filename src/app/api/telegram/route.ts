@@ -30,44 +30,56 @@ export async function POST(req: NextRequest) {
       try {
         if (callbackData.startsWith('confirm_inst_')) {
           const rest = callbackData.replace('confirm_inst_', '');
+          // rest: ${instId}_c${index} ou ${instId}_a${index} ou ${instId} (fallback)
+          const parts = rest.split('_');
+          const instId = parts[0];
+          const typeAndIndex = parts[1]; // c0, a1, etc.
           
-          if (rest.includes('_card_')) {
-            const parts = rest.split('_card_');
-            const instId = parts[0];
-            const cardId = parts[1];
+          const instRes = await db.select().from(installments).where(eq(installments.id, instId));
+          if (instRes.length > 0) {
+            const inst = instRes[0];
+            const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, inst.userId));
+            const userCards = await db.select().from(creditCards).where(eq(creditCards.userId, inst.userId));
             
-            await db.update(installments).set({ creditCardId: cardId }).where(eq(installments.id, instId));
-            await db.update(transactions).set({ status: 'confirmed', creditCardId: cardId, accountId: null }).where(eq(transactions.installmentId, instId));
-            await sendTelegramMessage(chatId, "✅ Compra parcelada no cartão confirmada com sucesso!");
-          } else if (rest.includes('_acc_')) {
-            const parts = rest.split('_acc_');
-            const instId = parts[0];
-            const accountId = parts[1];
-            
-            await db.update(installments).set({ creditCardId: null }).where(eq(installments.id, instId));
-            await db.update(transactions).set({ status: 'confirmed', accountId: accountId, creditCardId: null }).where(eq(transactions.installmentId, instId));
-            
-            // Debitar a primeira parcela do saldo
-            const currentTx = await db.select().from(transactions)
-              .where(eq(transactions.installmentId, instId))
-              .orderBy(transactions.createdAt);
-            
-            if (currentTx.length > 0) {
-              const accRes = await db.select().from(accounts).where(eq(accounts.id, accountId));
-              if (accRes.length > 0) {
-                const acc = accRes[0];
-                const currentBalance = parseFloat(acc.balance);
-                const val = parseFloat(currentTx[0].amount);
-                const newBalance = currentBalance - val;
-                await db.update(accounts).set({ balance: newBalance.toString() }).where(eq(accounts.id, accountId));
+            if (typeAndIndex && typeAndIndex.startsWith('c')) {
+              const index = parseInt(typeAndIndex.substring(1));
+              const card = userCards[index];
+              if (card) {
+                await db.update(installments).set({ creditCardId: card.id }).where(eq(installments.id, instId));
+                await db.update(transactions).set({ status: 'confirmed', creditCardId: card.id, accountId: null }).where(eq(transactions.installmentId, instId));
+                await sendTelegramMessage(chatId, `✅ Compra parcelada no cartão *${card.name}* confirmada com sucesso!`);
+              } else {
+                await sendTelegramMessage(chatId, "⚠️ Cartão selecionado não encontrado.");
               }
+            } else if (typeAndIndex && typeAndIndex.startsWith('a')) {
+              const index = parseInt(typeAndIndex.substring(1));
+              const acc = userAccounts[index];
+              if (acc) {
+                await db.update(installments).set({ creditCardId: null }).where(eq(installments.id, instId));
+                await db.update(transactions).set({ status: 'confirmed', accountId: acc.id, creditCardId: null }).where(eq(transactions.installmentId, instId));
+                
+                // Debitar a primeira parcela do saldo
+                const currentTx = await db.select().from(transactions)
+                  .where(eq(transactions.installmentId, instId))
+                  .orderBy(transactions.createdAt);
+                
+                if (currentTx.length > 0) {
+                  const currentBalance = parseFloat(acc.balance);
+                  const val = parseFloat(currentTx[0].amount);
+                  const newBalance = currentBalance - val;
+                  await db.update(accounts).set({ balance: newBalance.toString() }).where(eq(accounts.id, acc.id));
+                }
+                await sendTelegramMessage(chatId, `✅ Compra parcelada na conta *${acc.name}* confirmada com sucesso!`);
+              } else {
+                await sendTelegramMessage(chatId, "⚠️ Conta selecionada não encontrada.");
+              }
+            } else {
+              // Fallback antigo
+              await db.update(transactions).set({ status: 'confirmed' }).where(eq(transactions.installmentId, instId));
+              await sendTelegramMessage(chatId, "✅ Compra parcelada confirmada com sucesso!");
             }
-            await sendTelegramMessage(chatId, "✅ Compra parcelada na conta confirmada com sucesso!");
           } else {
-            // Fallback antigo
-            const instId = rest;
-            await db.update(transactions).set({ status: 'confirmed' }).where(eq(transactions.installmentId, instId));
-            await sendTelegramMessage(chatId, "✅ Compra parcelada confirmada com sucesso!");
+            await sendTelegramMessage(chatId, "⚠️ Compra parcelada não encontrada.");
           }
 
         } else if (callbackData.startsWith('cancel_inst_')) {
@@ -78,50 +90,50 @@ export async function POST(req: NextRequest) {
 
         } else if (callbackData.startsWith('confirm_')) {
           const rest = callbackData.replace('confirm_', '');
-          
-          if (rest.includes('_card_')) {
-            const parts = rest.split('_card_');
-            const txId = parts[0];
-            const cardId = parts[1];
+          // rest: ${txId}_c${index} ou ${txId}_a${index} ou ${txId} (fallback)
+          const parts = rest.split('_');
+          const txId = parts[0];
+          const typeAndIndex = parts[1]; // c0, a1, etc.
 
-            await db.update(transactions).set({ 
-              status: 'confirmed', 
-              creditCardId: cardId, 
-              accountId: null 
-            }).where(eq(transactions.id, txId));
+          const txRes = await db.select().from(transactions).where(eq(transactions.id, txId));
+          if (txRes.length > 0 && txRes[0].status === 'pending') {
+            const tx = txRes[0];
+            const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, tx.userId));
+            const userCards = await db.select().from(creditCards).where(eq(creditCards.userId, tx.userId));
 
-            await sendTelegramMessage(chatId, "✅ Transação confirmada no cartão com sucesso!");
-          } else if (rest.includes('_acc_')) {
-            const parts = rest.split('_acc_');
-            const txId = parts[0];
-            const accountId = parts[1];
-
-            const txRes = await db.select().from(transactions).where(eq(transactions.id, txId));
-            if (txRes.length > 0 && txRes[0].status === 'pending') {
-              const tx = txRes[0];
-              const accRes = await db.select().from(accounts).where(eq(accounts.id, accountId));
-              if (accRes.length > 0) {
-                const acc = accRes[0];
+            if (typeAndIndex && typeAndIndex.startsWith('c')) {
+              const index = parseInt(typeAndIndex.substring(1));
+              const card = userCards[index];
+              if (card) {
+                await db.update(transactions).set({ 
+                  status: 'confirmed', 
+                  creditCardId: card.id, 
+                  accountId: null 
+                }).where(eq(transactions.id, txId));
+                await sendTelegramMessage(chatId, `✅ Transação confirmada no cartão *${card.name}* com sucesso!`);
+              } else {
+                await sendTelegramMessage(chatId, "⚠️ Cartão selecionado não encontrado.");
+              }
+            } else if (typeAndIndex && typeAndIndex.startsWith('a')) {
+              const index = parseInt(typeAndIndex.substring(1));
+              const acc = userAccounts[index];
+              if (acc) {
                 const currentBalance = parseFloat(acc.balance);
                 const val = parseFloat(tx.amount);
                 const newBalance = tx.type === 'income' ? currentBalance + val : currentBalance - val;
-                await db.update(accounts).set({ balance: newBalance.toString() }).where(eq(accounts.id, accountId));
+                await db.update(accounts).set({ balance: newBalance.toString() }).where(eq(accounts.id, acc.id));
+
+                await db.update(transactions).set({ 
+                  status: 'confirmed', 
+                  accountId: acc.id, 
+                  creditCardId: null 
+                }).where(eq(transactions.id, txId));
+                await sendTelegramMessage(chatId, `✅ Transação confirmada na conta *${acc.name}* com sucesso!`);
+              } else {
+                await sendTelegramMessage(chatId, "⚠️ Conta selecionada não encontrada.");
               }
-              await db.update(transactions).set({ 
-                status: 'confirmed', 
-                accountId: accountId, 
-                creditCardId: null 
-              }).where(eq(transactions.id, txId));
-              await sendTelegramMessage(chatId, "✅ Transação confirmada na conta com sucesso!");
             } else {
-              await sendTelegramMessage(chatId, "⚠️ Transação já processada ou não encontrada.");
-            }
-          } else {
-            // Fallback antigo
-            const txId = rest;
-            const txRes = await db.select().from(transactions).where(eq(transactions.id, txId));
-            if (txRes.length > 0 && txRes[0].status === 'pending') {
-              const tx = txRes[0];
+              // Fallback antigo
               if (tx.accountId) {
                 const accRes = await db.select().from(accounts).where(eq(accounts.id, tx.accountId));
                 if (accRes.length > 0) {
@@ -134,9 +146,9 @@ export async function POST(req: NextRequest) {
               }
               await db.update(transactions).set({ status: 'confirmed' }).where(eq(transactions.id, txId));
               await sendTelegramMessage(chatId, "✅ Transação confirmada e salva com sucesso!");
-            } else {
-              await sendTelegramMessage(chatId, "⚠️ Transação já processada ou não encontrada.");
             }
+          } else {
+            await sendTelegramMessage(chatId, "⚠️ Transação já processada ou não encontrada.");
           }
 
         } else if (callbackData.startsWith('cancel_')) {
@@ -555,19 +567,21 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
 
       const inlineKeyboard = [];
       
-      for (const card of userCards) {
+      for (let i = 0; i < userCards.length; i++) {
+        const card = userCards[i];
         const isSuggested = card.id === defaultCardId;
         const prefix = isSuggested ? "✨ 💳 " : "💳 ";
         inlineKeyboard.push([
-          { text: `${prefix}${card.name}`, callback_data: `confirm_inst_${newInst.id}_card_${card.id}` }
+          { text: `${prefix}${card.name}`, callback_data: `confirm_inst_${newInst.id}_c${i}` }
         ]);
       }
 
-      for (const acc of userAccounts) {
+      for (let i = 0; i < userAccounts.length; i++) {
+        const acc = userAccounts[i];
         const isSuggested = acc.id === suggestedAccountId;
         const prefix = isSuggested ? "✨ 🏦 " : "🏦 ";
         inlineKeyboard.push([
-          { text: `${prefix}${acc.name}`, callback_data: `confirm_inst_${newInst.id}_acc_${acc.id}` }
+          { text: `${prefix}${acc.name}`, callback_data: `confirm_inst_${newInst.id}_a${i}` }
         ]);
       }
 
@@ -608,27 +622,30 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
     const inlineKeyboard = [];
 
     if (extractedData.type === 'expense') {
-      for (const card of userCards) {
+      for (let i = 0; i < userCards.length; i++) {
+        const card = userCards[i];
         const isSuggested = card.id === suggestedCardId;
         const prefix = isSuggested ? "✨ 💳 " : "💳 ";
         inlineKeyboard.push([
-          { text: `${prefix}${card.name}`, callback_data: `confirm_${newTx.id}_card_${card.id}` }
+          { text: `${prefix}${card.name}`, callback_data: `confirm_${newTx.id}_c${i}` }
         ]);
       }
       
-      for (const acc of userAccounts) {
+      for (let i = 0; i < userAccounts.length; i++) {
+        const acc = userAccounts[i];
         const isSuggested = acc.id === suggestedAccountId;
         const prefix = isSuggested ? "✨ 🏦 " : "🏦 ";
         inlineKeyboard.push([
-          { text: `${prefix}${acc.name}`, callback_data: `confirm_${newTx.id}_acc_${acc.id}` }
+          { text: `${prefix}${acc.name}`, callback_data: `confirm_${newTx.id}_a${i}` }
         ]);
       }
     } else {
-      for (const acc of userAccounts) {
+      for (let i = 0; i < userAccounts.length; i++) {
+        const acc = userAccounts[i];
         const isSuggested = acc.id === suggestedAccountId;
         const prefix = isSuggested ? "✨ 🏦 " : "🏦 ";
         inlineKeyboard.push([
-          { text: `${prefix}${acc.name}`, callback_data: `confirm_${newTx.id}_acc_${acc.id}` }
+          { text: `${prefix}${acc.name}`, callback_data: `confirm_${newTx.id}_a${i}` }
         ]);
       }
     }
