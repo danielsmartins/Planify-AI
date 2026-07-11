@@ -15,6 +15,29 @@ if (typeof global !== 'undefined' && !('DOMMatrix' in global)) {
   });
 }
 
+async function extractTextFromPdf(buffer: Buffer): Promise<string> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pdfParseModule: any = await import('pdf-parse');
+  const mainExport = pdfParseModule.default || pdfParseModule;
+  if (typeof mainExport === 'function') {
+    const data = await mainExport(buffer);
+    return data.text || '';
+  }
+  if (pdfParseModule.PDFParse) {
+    const uint8Array = new Uint8Array(buffer);
+    const parser = new pdfParseModule.PDFParse(uint8Array);
+    await parser.load();
+    const result = await parser.getText();
+    if (result && typeof result === 'object' && 'text' in result) {
+      return (result as any).text || '';
+    }
+    if (typeof result === 'string') {
+      return result;
+    }
+  }
+  throw new Error("Não foi possível encontrar um método de parsing de PDF válido no módulo pdf-parse.");
+}
+
 export async function POST(req: NextRequest) {
   let chatId: string | undefined = undefined;
 
@@ -328,12 +351,7 @@ export async function POST(req: NextRequest) {
       const fileRes = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`);
       const arrayBuffer = await fileRes.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pdfParseModule: any = await import('pdf-parse');
-      const pdfParse = pdfParseModule.default || pdfParseModule;
-      const pdfData = await pdfParse(buffer);
-      const text = pdfData.text;
+      const text = await extractTextFromPdf(buffer);
 
       if (!text || text.trim().length === 0) {
         await sendTelegramMessage(chatId, "⚠️ Não consegui extrair nenhum texto do PDF. O arquivo pode estar protegido por senha ou conter apenas imagens.");

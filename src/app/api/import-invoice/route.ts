@@ -13,13 +13,31 @@ if (typeof global !== 'undefined' && !('DOMMatrix' in global)) {
     configurable: true
   });
 }
+async function extractTextFromPdf(buffer: Buffer): Promise<string> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pdfParseModule: any = await import('pdf-parse');
+  const mainExport = pdfParseModule.default || pdfParseModule;
+  if (typeof mainExport === 'function') {
+    const data = await mainExport(buffer);
+    return data.text || '';
+  }
+  if (pdfParseModule.PDFParse) {
+    const uint8Array = new Uint8Array(buffer);
+    const parser = new pdfParseModule.PDFParse(uint8Array);
+    await parser.load();
+    const result = await parser.getText();
+    if (result && typeof result === 'object' && 'text' in result) {
+      return (result as any).text || '';
+    }
+    if (typeof result === 'string') {
+      return result;
+    }
+  }
+  throw new Error("Não foi possível encontrar um método de parsing de PDF válido no módulo pdf-parse.");
+}
+
 export async function POST(req: NextRequest) {
   try {
-    // Importação dinâmica para evitar o erro DOMMatrix is not defined no build do Next.js
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pdfParseModule: any = await import('pdf-parse');
-    const pdfParse = pdfParseModule.default || pdfParseModule;
-
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
@@ -39,8 +57,7 @@ export async function POST(req: NextRequest) {
     // Ler texto do PDF
     let text = '';
     try {
-      const pdfData = await pdfParse(buffer);
-      text = pdfData.text;
+      text = await extractTextFromPdf(buffer);
     } catch (e) {
       console.error('Erro ao ler PDF:', e);
       return NextResponse.json({ error: 'Erro ao extrair texto do PDF. O arquivo pode estar corrompido ou protegido por senha.' }, { status: 400 });
