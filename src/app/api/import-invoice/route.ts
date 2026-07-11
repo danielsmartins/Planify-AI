@@ -14,20 +14,38 @@ if (typeof global !== 'undefined' && !('DOMMatrix' in global)) {
   });
 }
 async function extractTextFromPdf(buffer: Buffer): Promise<string> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pdfParseModule: any = await import('pdf-parse');
+  const pdfParseModule = await import('pdf-parse') as Record<string, unknown>;
+  
+  // Caso 1: Export clássico como função direta
   const mainExport = pdfParseModule.default || pdfParseModule;
   if (typeof mainExport === 'function') {
-    const data = await mainExport(buffer);
+    const data = await (mainExport as (buf: Buffer) => Promise<{ text: string }>)(buffer);
     return data.text || '';
   }
+  
+  // Caso 2: Versão moderna com a classe PDFParse (Vercel/ESM)
   if (pdfParseModule.PDFParse) {
+    const PDFParseClass = pdfParseModule.PDFParse as (new (data: Uint8Array) => {
+      load: () => Promise<void>;
+      getText: () => Promise<unknown>;
+    }) & { setWorker: (worker: string) => void };
+
+    try {
+      const workerModule = await import('pdf-parse/worker') as { getData: () => string };
+      if (workerModule && typeof workerModule.getData === 'function') {
+        PDFParseClass.setWorker(workerModule.getData());
+      }
+    } catch (workerErr) {
+      console.error("Falha ao configurar worker em memória para o PDFParse:", workerErr);
+    }
+
     const uint8Array = new Uint8Array(buffer);
-    const parser = new pdfParseModule.PDFParse(uint8Array);
+    const parser = new PDFParseClass(uint8Array);
     await parser.load();
     const result = await parser.getText();
     if (result && typeof result === 'object' && 'text' in result) {
-      return (result as any).text || '';
+      const obj = result as Record<string, unknown>;
+      return typeof obj.text === 'string' ? obj.text : '';
     }
     if (typeof result === 'string') {
       return result;

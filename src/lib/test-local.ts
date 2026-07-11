@@ -39,7 +39,7 @@ global.fetch = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Re
 
   // Qualquer outra requisição (ex: enviar mensagem ao Telegram) passa direto
   return originalFetch(input, init);
-}) as any;
+}) as typeof global.fetch;
 
 async function runTest() {
   // Simulando a requisição do Telegram com um arquivo PDF

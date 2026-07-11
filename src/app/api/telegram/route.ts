@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, transactions, categories, installments, accounts, creditCards } from "@/db/schema";
+import crypto from "crypto";
 import { eq } from "drizzle-orm";
 import { extractFinancialData, extractInvoiceTransactions } from "@/lib/gemini";
 import { sendTelegramMessage, answerCallbackQuery } from "@/lib/telegram";
@@ -16,20 +17,38 @@ if (typeof global !== 'undefined' && !('DOMMatrix' in global)) {
 }
 
 async function extractTextFromPdf(buffer: Buffer): Promise<string> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pdfParseModule: any = await import('pdf-parse');
+  const pdfParseModule = await import('pdf-parse') as Record<string, unknown>;
+  
+  // Caso 1: Export clássico como função direta
   const mainExport = pdfParseModule.default || pdfParseModule;
   if (typeof mainExport === 'function') {
-    const data = await mainExport(buffer);
+    const data = await (mainExport as (buf: Buffer) => Promise<{ text: string }>)(buffer);
     return data.text || '';
   }
+  
+  // Caso 2: Versão moderna com a classe PDFParse (Vercel/ESM)
   if (pdfParseModule.PDFParse) {
+    const PDFParseClass = pdfParseModule.PDFParse as (new (data: Uint8Array) => {
+      load: () => Promise<void>;
+      getText: () => Promise<unknown>;
+    }) & { setWorker: (worker: string) => void };
+
+    try {
+      const workerModule = await import('pdf-parse/worker') as { getData: () => string };
+      if (workerModule && typeof workerModule.getData === 'function') {
+        PDFParseClass.setWorker(workerModule.getData());
+      }
+    } catch (workerErr) {
+      console.error("Falha ao configurar worker em memória para o PDFParse:", workerErr);
+    }
+
     const uint8Array = new Uint8Array(buffer);
-    const parser = new pdfParseModule.PDFParse(uint8Array);
+    const parser = new PDFParseClass(uint8Array);
     await parser.load();
     const result = await parser.getText();
     if (result && typeof result === 'object' && 'text' in result) {
-      return (result as any).text || '';
+      const obj = result as Record<string, unknown>;
+      return typeof obj.text === 'string' ? obj.text : '';
     }
     if (typeof result === 'string') {
       return result;
@@ -190,17 +209,11 @@ export async function POST(req: NextRequest) {
           await sendTelegramMessage(chatId, "❌ Transação cancelada.");
 
         } else if (callbackData.startsWith('import_pdf_')) {
-          const cardId = callbackData.replace('import_pdf_', '');
-          const replyTo = callbackQuery.message.reply_to_message;
-          
-          if (!replyTo || !replyTo.document) {
-            await sendTelegramMessage(chatId, "⚠️ Erro: Não foi possível localizar a fatura PDF original. Por favor, envie o arquivo novamente.");
-            await answerCallbackQuery(callbackQuery.id);
-            return NextResponse.json({ status: "Original PDF not found" });
-          }
-
-          const doc = replyTo.document;
-          const fileId = doc.file_id;
+          const rest = callbackData.replace('import_pdf_', '');
+          // rest: c${cardIndex}_${importGroupId}
+          const parts = rest.split('_');
+          const cardPart = parts[0]; // c0, c1, etc.
+          const importGroupId = parts[1];
 
           const userRes = await db.select().from(users).where(eq(users.telegramChatId, chatId));
           const user = userRes[0];
@@ -210,93 +223,48 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ status: "User not found" });
           }
 
-          await sendTelegramMessage(chatId, "⏳ Baixando e processando sua fatura PDF...");
+          const userCards = await db.select().from(creditCards).where(eq(creditCards.userId, user.id));
+          const cardIndex = parseInt(cardPart.substring(1));
+          const card = userCards[cardIndex];
 
-          const botToken = process.env.TELEGRAM_BOT_TOKEN;
-          const fileInfoRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
-          const fileInfo = await fileInfoRes.json();
+          if (!card) {
+            await sendTelegramMessage(chatId, "⚠️ Cartão selecionado não encontrado.");
+            await answerCallbackQuery(callbackQuery.id);
+            return NextResponse.json({ status: "Card not found" });
+          }
+
+          // Confirmar todas as transações pendentes deste grupo
+          const txs = await db.select().from(transactions).where(eq(transactions.installmentId, importGroupId));
           
-          if (!fileInfo.ok || !fileInfo.result.file_path) {
-            await sendTelegramMessage(chatId, "⚠️ Erro ao obter informações do arquivo no Telegram.");
+          if (txs.length === 0) {
+            await sendTelegramMessage(chatId, "⚠️ Nenhuma transação pendente encontrada para esta importação. O processo pode ter expirado ou sido cancelado.");
             await answerCallbackQuery(callbackQuery.id);
-            return NextResponse.json({ status: "Error getting file path" });
+            return NextResponse.json({ status: "No pending txs found" });
           }
 
-          const filePath = fileInfo.result.file_path;
-          const fileRes = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`);
-          const arrayBuffer = await fileRes.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
+          await db.update(transactions).set({
+            status: 'confirmed',
+            creditCardId: card.id,
+            installmentId: null // Limpar o agrupador
+          }).where(eq(transactions.installmentId, importGroupId));
 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const pdfParseModule: any = await import('pdf-parse');
-          const pdfParse = pdfParseModule.default || pdfParseModule;
-          const pdfData = await pdfParse(buffer);
-          const text = pdfData.text;
-
-          if (!text || text.trim().length === 0) {
-            await sendTelegramMessage(chatId, "⚠️ Não consegui extrair texto do PDF.");
-            await answerCallbackQuery(callbackQuery.id);
-            return NextResponse.json({ status: "Empty PDF text" });
-          }
-
-          // Calcular data baseada no cartão
-          let txDate = new Date();
-          const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, cardId));
-          let cardName = "Cartão";
-          
-          if (cardRes.length > 0) {
-            const card = cardRes[0];
-            cardName = card.name;
-            const resultDate = new Date();
-            const currentDay = resultDate.getDate();
-            if (currentDay >= Number(card.closingDay)) {
-              resultDate.setMonth(resultDate.getMonth() + 1);
-            }
-            resultDate.setDate(Number(card.dueDay));
-            txDate = resultDate;
-          }
-
-          const referenceDateStr = txDate.toISOString().split('T')[0];
-
-          const userCats = await db.select().from(categories).where(eq(categories.userId, user.id));
-          const catNames = userCats.map(c => c.name);
-
-          const extractedData = await extractInvoiceTransactions(text, catNames, referenceDateStr);
-
-          if (extractedData.length === 0) {
-            await sendTelegramMessage(chatId, "⚠️ Não foi possível encontrar nenhuma compra na fatura.");
-            await answerCallbackQuery(callbackQuery.id);
-            return NextResponse.json({ status: "No transactions extracted" });
-          }
-
-          const txToInsert = extractedData.map(tx => ({
-            userId: user.id,
-            amount: tx.amount.toString(),
-            description: tx.description,
-            category: tx.category,
-            type: 'expense' as const,
-            creditCardId: cardId,
-            createdAt: tx.date ? new Date(tx.date) : txDate,
-            status: 'confirmed' as const,
-          }));
-
-          await db.insert(transactions).values(txToInsert);
-
-          const summary = extractedData.slice(0, 5).map(tx => {
-            const formattedDate = tx.date ? new Date(tx.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
+          const summary = txs.slice(0, 5).map(tx => {
+            const formattedDate = tx.createdAt ? new Date(tx.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
             const dateStr = formattedDate ? `[${formattedDate}] ` : '';
             return `• ${dateStr}R$ ${tx.amount} - ${tx.description} (${tx.category})`;
           }).join('\n');
           
-          const restCount = extractedData.length - 5;
+          const restCount = txs.length - 5;
           const extraText = restCount > 0 ? `\n• e mais ${restCount} transações...` : '';
 
           await sendTelegramMessage(
             chatId, 
-            `✅ *Importação concluída!*\n\nImportadas *${extractedData.length} compras* para o cartão *${cardName}*:\n\n${summary}${extraText}`
+            `✅ *Importação concluída!*\n\nImportadas *${txs.length} compras* para o cartão *${card.name}*:\n\n${summary}${extraText}`
           );
 
-        } else if (callbackData === 'cancel_pdf') {
+        } else if (callbackData.startsWith('cancel_pdf_')) {
+          const importGroupId = callbackData.replace('cancel_pdf_', '');
+          await db.delete(transactions).where(eq(transactions.installmentId, importGroupId));
           await sendTelegramMessage(chatId, "❌ Importação de fatura cancelada.");
         }
       } catch (callbackError) {
@@ -388,16 +356,35 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      const importGroupId = crypto.randomUUID();
+
+      const txValues = extractedData.map(tx => ({
+        userId: user.id,
+        amount: tx.amount.toString(),
+        description: tx.description,
+        category: tx.category,
+        type: 'expense' as const,
+        creditCardId: suggestedCardId,
+        status: 'pending' as const,
+        installmentId: importGroupId,
+        createdAt: tx.date ? new Date(tx.date + 'T12:00:00') : new Date()
+      }));
+
+      if (txValues.length > 0) {
+        await db.insert(transactions).values(txValues);
+      }
+
       // Criar botões para selecionar o cartão
       const inlineKeyboard = [];
-      for (const card of userCards) {
+      for (let i = 0; i < userCards.length; i++) {
+        const card = userCards[i];
         const isSuggested = card.id === suggestedCardId;
         const prefix = isSuggested ? "✨ 💳 " : "💳 ";
         inlineKeyboard.push([
-          { text: `${prefix}Importar para: ${card.name}`, callback_data: `import_pdf_${card.id}` }
+          { text: `${prefix}Importar para: ${card.name}`, callback_data: `import_pdf_c${i}_${importGroupId}` }
         ]);
       }
-      inlineKeyboard.push([{ text: "❌ Cancelar", callback_data: "cancel_pdf" }]);
+      inlineKeyboard.push([{ text: "❌ Cancelar", callback_data: `cancel_pdf_${importGroupId}` }]);
 
       const replyMarkup = { inline_keyboard: inlineKeyboard };
 
