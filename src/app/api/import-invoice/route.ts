@@ -4,6 +4,15 @@ import { extractInvoiceTransactions } from '@/lib/gemini';
 import { db } from '@/db';
 import { transactions, categories, creditCards } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+
+// Polyfill DOMMatrix for Node.js environments (used by pdfjs-dist inside pdf-parse)
+if (typeof global !== 'undefined' && !('DOMMatrix' in global)) {
+  Object.defineProperty(global, 'DOMMatrix', {
+    value: class DOMMatrix {},
+    writable: true,
+    configurable: true
+  });
+}
 export async function POST(req: NextRequest) {
   try {
     // Importação dinâmica para evitar o erro DOMMatrix is not defined no build do Next.js

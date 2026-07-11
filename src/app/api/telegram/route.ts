@@ -5,6 +5,15 @@ import { eq } from "drizzle-orm";
 import { extractFinancialData, extractInvoiceTransactions } from "@/lib/gemini";
 import { sendTelegramMessage, answerCallbackQuery } from "@/lib/telegram";
 
+// Polyfill DOMMatrix for Node.js environments (used by pdfjs-dist inside pdf-parse)
+if (typeof global !== 'undefined' && !('DOMMatrix' in global)) {
+  Object.defineProperty(global, 'DOMMatrix', {
+    value: class DOMMatrix {},
+    writable: true,
+    configurable: true
+  });
+}
+
 export async function POST(req: NextRequest) {
   let chatId: string | undefined = undefined;
 
