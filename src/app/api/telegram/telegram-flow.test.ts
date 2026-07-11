@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'vitest';
-import { getPaymentMethodSuggestion } from './route';
+import { getPaymentMethodSuggestion } from '@/lib/telegram-utils';
 
 describe('Telegram Suggestion Logic', () => {
   const mockCards = [
