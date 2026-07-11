@@ -11,6 +11,8 @@ export interface ExtractedData {
   isInstallment?: boolean;
   installmentsCount?: number;
   currentInstallment?: number;
+  date?: string; // Data da transação em formato YYYY-MM-DD
+  paymentMethodSuggestion?: string; // Nome sugerido do cartão ou conta
 }
 
 export async function extractFinancialData(
@@ -34,7 +36,8 @@ Formato esperado:
   "type": string ("income" se for entrada de dinheiro/ganho, ou "expense" se for um gasto/despesa),
   "isInstallment": boolean (true se a pessoa mencionar que foi parcelado, crédito, em x vezes, etc. Falso caso contrário),
   "installmentsCount": number (se isInstallment for true, qual o total de parcelas? Ex: se comprou em 10x, retorne 10. Se não for parcelado, omita ou retorne null),
-  "currentInstallment": number (se isInstallment for true, em qual parcela a pessoa está? Se ela não falar, assuma 1. Se ela falar "já paguei 2", então ela está indo pagar a 3, retorne 3. Se não for parcelado, omita ou retorne null)
+  "currentInstallment": number (se isInstallment for true, em qual parcela a pessoa está? Se ela não falar, assuma 1. Se ela falar "já paguei 2", então ela está indo pagar a 3, retorne 3. Se não for parcelado, omita ou retorne null),
+  "paymentMethodSuggestion": string (se o usuário mencionar alguma conta ou cartão específico no áudio ou texto, ex: "no nubank", "pelo itaú", retorne o nome do banco/cartão detectado, ex: "Nubank", "Itaú". Se não mencionar, omita ou retorne null)
 }
 
 Categorias existentes do usuário: ${existingCategories.length > 0 ? existingCategories.join(', ') : 'Nenhuma categoria cadastrada'}.
@@ -86,18 +89,28 @@ Regras:
   }
 }
 
-export async function extractInvoiceTransactions(text: string, existingCategories: string[] = []): Promise<ExtractedData[]> {
+export async function extractInvoiceTransactions(
+  text: string, 
+  existingCategories: string[] = [],
+  referenceDateStr?: string
+): Promise<ExtractedData[]> {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash", generationConfig: { responseMimeType: "application/json" } });
 
-    const prompt = `
+    let prompt = `
 Você é um assistente financeiro de extração de faturas de cartão de crédito.
 Abaixo está o texto extraído de uma fatura de cartão de crédito em PDF:
 
 """
 ${text.substring(0, 30000)} // Limite para não estourar tokens
 """
+`;
 
+    if (referenceDateStr) {
+      prompt += `\nConsidere que a data de vencimento desta fatura é ${referenceDateStr}. Use esta informação e o período da fatura indicado no texto (por exemplo, "05 JUN a 05 JUL") para deduzir o ano e o mês corretos e calcular a data exata no formato ISO YYYY-MM-DD para cada transação listada.\n`;
+    }
+
+    prompt += `
 Sua tarefa é extrair TODAS as compras/despesas listadas nessa fatura e retornar um array JSON contendo cada transação.
 
 Formato esperado:
@@ -106,7 +119,8 @@ Formato esperado:
     "amount": número (valor da compra),
     "description": string (descrição do estabelecimento/compra),
     "category": string (classifique a compra),
-    "type": "expense"
+    "type": "expense",
+    "date": string (data exata da transação no formato ISO "YYYY-MM-DD")
   }
 ]
 

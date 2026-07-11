@@ -41,17 +41,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Não foi possível encontrar texto no PDF.' }, { status: 400 });
     }
 
-    // Buscar categorias do usuário para melhor classificação
-    const userCats = await db.select().from(categories).where(eq(categories.userId, session.user.id));
-    const catNames = userCats.map(c => c.name);
-
-    // Enviar para o Gemini
-    const extractedData = await extractInvoiceTransactions(text, catNames);
-
-    if (extractedData.length === 0) {
-      return NextResponse.json({ error: 'Não foi possível encontrar transações na fatura ou a IA não conseguiu processar.' }, { status: 400 });
-    }
-
     // Calcular data baseada no cartão de crédito
     let txDate = new Date();
     const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, creditCardId));
@@ -67,6 +56,19 @@ export async function POST(req: NextRequest) {
       txDate = resultDate;
     }
 
+    const referenceDateStr = txDate.toISOString().split('T')[0];
+
+    // Buscar categorias do usuário para melhor classificação
+    const userCats = await db.select().from(categories).where(eq(categories.userId, session.user.id));
+    const catNames = userCats.map(c => c.name);
+
+    // Enviar para o Gemini
+    const extractedData = await extractInvoiceTransactions(text, catNames, referenceDateStr);
+
+    if (extractedData.length === 0) {
+      return NextResponse.json({ error: 'Não foi possível encontrar transações na fatura ou a IA não conseguiu processar.' }, { status: 400 });
+    }
+
     // Preparar inserção no banco
     const txToInsert = extractedData.map(tx => ({
       userId: session.user.id,
@@ -75,7 +77,7 @@ export async function POST(req: NextRequest) {
       category: tx.category,
       type: 'expense' as const,
       creditCardId: creditCardId,
-      createdAt: txDate
+      createdAt: tx.date ? new Date(tx.date) : txDate
     }));
 
     await db.insert(transactions).values(txToInsert);

@@ -1,4 +1,4 @@
-export async function sendTelegramMessage(chatId: string, text: string, replyMarkup?: Record<string, unknown>) {
+export async function sendTelegramMessage(chatId: string, text: string, replyMarkup?: Record<string, unknown>, replyToMessageId?: number) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
     console.error("TELEGRAM_BOT_TOKEN is not set.");
@@ -18,6 +18,7 @@ export async function sendTelegramMessage(chatId: string, text: string, replyMar
         text: text,
         parse_mode: "Markdown",
         reply_markup: replyMarkup,
+        reply_to_message_id: replyToMessageId,
       }),
     });
 
