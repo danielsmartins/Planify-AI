@@ -7,6 +7,7 @@ As regras abaixo devem ser seguidas estritamente por qualquer agente trabalhando
 3. **Drizzle ORM e Neon DB**: Interações com o banco de dados devem usar o Drizzle ORM. O schema fica unicamente em `src/db/schema.ts`. Sempre exporte os tipos do schema para reaproveitamento (ex: `typeof users.$inferSelect`).
 4. **Testes Unitários (Vitest)**: Código crítico de regras de negócio, como parsing e interpretação de mensagens financeiras que vierem do WhatsApp, DEVE possuir cobertura de testes automatizados. O ambiente já está configurado com Vitest + Testing Library.
 5. **Tipagem e Padrões**: Use TypeScript Strict. Não use `any`. Nomes de arquivos utilitários/hooks em `kebab-case.ts`. Componentes React em `PascalCase.tsx`.
+6. **Linter e Builder**: Sempre execute o linter (`npm run lint`) e o build (`npm run build`) para validar a corretude e a ausência de erros de build/tipagem nas alterações feitas antes de finalizar qualquer tarefa, realizar commits ou push.
 10. **Sleek & Minimalist Design System (Linear/Shadcn style)**:
     - **Colors**: Dominated by high-contrast dark theme. Dark slate/neutral backgrounds (`bg-neutral-950` / `bg-[#0a0a0a]`), thin borders (`border-neutral-800` / `border-[#1f1f1f]`), and subtle accents (neutral white text, violet/slate-500 buttons). No heavy colorful glowing gradients. Colors are muted and focus is on content.
     - **Typography**: Crisp, clean fonts (Inter/Geist) with strict visual hierarchy. Small muted labels for metadata (`text-neutral-500 text-xs`).

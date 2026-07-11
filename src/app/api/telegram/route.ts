@@ -182,7 +182,8 @@ export async function POST(req: NextRequest) {
           const arrayBuffer = await fileRes.arrayBuffer();
           const buffer = Buffer.from(arrayBuffer);
 
-          const pdfParseModule = await import('pdf-parse');
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const pdfParseModule: any = await import('pdf-parse');
           const pdfParse = pdfParseModule.default || pdfParseModule;
           const pdfData = await pdfParse(buffer);
           const text = pdfData.text;
@@ -306,7 +307,8 @@ export async function POST(req: NextRequest) {
       const arrayBuffer = await fileRes.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
-      const pdfParseModule = await import('pdf-parse');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pdfParseModule: any = await import('pdf-parse');
       const pdfParse = pdfParseModule.default || pdfParseModule;
       const pdfData = await pdfParse(buffer);
       const text = pdfData.text;
