@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/db';
-import { transactions, installments, creditCards, accounts, users } from '@/db/schema';
+import { transactions, installments, creditCards, accounts, users, categories } from '@/db/schema';
 import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { eq, and } from 'drizzle-orm';
@@ -329,19 +329,39 @@ export async function createInstallmentPurchase(formData: FormData) {
   return { success: true };
 }
 
-export async function completeOnboarding(
-  formData: FormData,
-  expensesList: Array<{ description: string; amount: number; category: string; date: string }>
-) {
+export async function completeOnboarding(data: {
+  account: {
+    name: string;
+    type: 'checking' | 'savings' | 'investment' | 'cash';
+    color: string;
+    balance: number;
+  };
+  creditCards: Array<{
+    name: string;
+    limitAmount: number;
+    closingDay: number;
+    dueDay: number;
+    color: string;
+    brand: string;
+  }>;
+  categories: Array<{
+    name: string;
+    color: string;
+    monthlyLimit: number;
+  }>;
+  expenses: Array<{
+    description: string;
+    amount: number;
+    category: string;
+    date: string;
+    paymentType: 'account' | 'card';
+    paymentTargetName?: string;
+  }>;
+}) {
   const session = await getSession();
   if (!session) return { error: 'Não autorizado' };
 
-  const accountName = formData.get('accountName') as string;
-  const accountType = formData.get('accountType') as 'checking' | 'savings' | 'investment' | 'cash';
-  const accountColor = formData.get('accountColor') as string;
-  const accountBalance = formData.get('accountBalance') as string;
-
-  if (!accountName || !accountType || !accountColor || !accountBalance) {
+  if (!data.account.name || !data.account.type || !data.account.color || data.account.balance === undefined) {
     return { error: 'Preencha todos os campos obrigatórios da conta bancária.' };
   }
 
@@ -349,38 +369,85 @@ export async function completeOnboarding(
     // 1. Criar a conta bancária inicial com o saldo informado
     const [newAccount] = await db.insert(accounts).values({
       userId: session.user.id,
-      name: accountName,
-      type: accountType,
-      color: accountColor,
-      balance: parseFloat(accountBalance).toString(),
+      name: data.account.name,
+      type: data.account.type,
+      color: data.account.color,
+      balance: data.account.balance.toString(),
     }).returning();
 
-    // 2. Criar os gastos listados (se houver)
-    if (expensesList && expensesList.length > 0) {
-      const txValues = expensesList.map(exp => {
+    // 2. Criar os cartões de crédito (se houver) e mapear os IDs gerados
+    const insertedCards: Record<string, string> = {};
+    if (data.creditCards && data.creditCards.length > 0) {
+      for (const card of data.creditCards) {
+        const [newCard] = await db.insert(creditCards).values({
+          userId: session.user.id,
+          name: card.name,
+          color: card.color,
+          closingDay: card.closingDay.toString(),
+          dueDay: card.dueDay.toString(),
+          limitAmount: card.limitAmount.toString(),
+          brand: card.brand || 'mastercard',
+        }).returning();
+        insertedCards[card.name] = newCard.id;
+      }
+    }
+
+    // 3. Atualizar as categorias do usuário
+    // Primeiro, deletar as categorias padrão associadas a esse usuário para evitar duplicados
+    await db.delete(categories).where(eq(categories.userId, session.user.id));
+    
+    // Inserir as novas categorias com limites definidos
+    if (data.categories && data.categories.length > 0) {
+      const categoryValues = data.categories.map(cat => ({
+        userId: session.user.id,
+        name: cat.name,
+        color: cat.color,
+        monthlyLimit: cat.monthlyLimit.toString(),
+      }));
+      await db.insert(categories).values(categoryValues);
+    }
+
+    // 4. Criar os gastos listados (se houver)
+    if (data.expenses && data.expenses.length > 0) {
+      const txValues = [];
+      for (const exp of data.expenses) {
         const dateObj = exp.date ? new Date(exp.date) : new Date();
         const finalDate = isNaN(dateObj.getTime()) ? new Date() : dateObj;
         
-        return {
+        let targetAccountId: string | null = null;
+        let targetCreditCardId: string | null = null;
+
+        if (exp.paymentType === 'card' && exp.paymentTargetName) {
+          targetCreditCardId = insertedCards[exp.paymentTargetName] || null;
+        } else {
+          targetAccountId = newAccount.id;
+        }
+
+        txValues.push({
           userId: session.user.id,
           amount: exp.amount.toString(),
           description: exp.description,
           category: exp.category || 'Outros',
           type: 'expense' as const,
-          accountId: newAccount.id,
+          accountId: targetAccountId,
+          creditCardId: targetCreditCardId,
           createdAt: finalDate,
-        };
-      });
-      await db.insert(transactions).values(txValues);
+        });
+      }
+      if (txValues.length > 0) {
+        await db.insert(transactions).values(txValues);
+      }
     }
 
-    // 3. Atualizar o status de onboardingCompleted do usuário
+    // 5. Atualizar o status de onboardingCompleted do usuário
     await db.update(users)
       .set({ onboardingCompleted: true })
       .where(eq(users.id, session.user.id));
 
     revalidatePath('/');
     revalidatePath('/accounts');
+    revalidatePath('/cards');
+    revalidatePath('/categories');
     revalidatePath('/transactions');
     return { success: true };
   } catch (e) {

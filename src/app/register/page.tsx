@@ -55,6 +55,44 @@ export default function RegisterPage() {
               className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-brand transition-colors"
             />
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Idade (Opcional)</label>
+              <input 
+                type="number" 
+                name="age" 
+                placeholder="Sua idade"
+                className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-brand transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Faixa de Renda</label>
+              <select 
+                name="incomeRange" 
+                className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-brand transition-colors appearance-none cursor-pointer"
+              >
+                <option value="" className="bg-slate-950 text-slate-400">Não informado</option>
+                <option value="Até R$ 2.000" className="bg-slate-950">Até R$ 2.000</option>
+                <option value="R$ 2.000 a R$ 5.000" className="bg-slate-950">R$ 2.000 a R$ 5.000</option>
+                <option value="R$ 5.000 a R$ 10.000" className="bg-slate-950">R$ 5.000 a R$ 10.000</option>
+                <option value="Mais de R$ 10.000" className="bg-slate-950">Mais de R$ 10.000</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Objetivo Financeiro</label>
+            <select 
+              name="financialGoal" 
+              className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-brand transition-colors appearance-none cursor-pointer"
+            >
+              <option value="" className="bg-slate-950 text-slate-400">Não informado</option>
+              <option value="Economizar Dinheiro" className="bg-slate-950">Economizar Dinheiro</option>
+              <option value="Sair das Dívidas" className="bg-slate-950">Sair das Dívidas</option>
+              <option value="Começar a Investir" className="bg-slate-950">Começar a Investir</option>
+              <option value="Organizar Gastos Mensais" className="bg-slate-950">Organizar Gastos Mensais</option>
+            </select>
+          </div>
           
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">Senha</label>

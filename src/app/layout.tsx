@@ -4,7 +4,7 @@ import "./globals.css";
 import { TopNav } from "@/components/layout/TopNav";
 import { getSession } from "@/lib/auth";
 import { db } from "@/db";
-import { users } from "@/db/schema";
+import { users, categories, type Category } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { OnboardingWizard } from "@/components/dashboard/OnboardingWizard";
 
@@ -31,11 +31,16 @@ export default async function RootLayout({
   const session = await getSession();
   let isOnboarded = true;
   let dbUser = null;
+  let initialCategories: Category[] = [];
 
   if (session) {
     const userRes = await db.select().from(users).where(eq(users.id, session.user.id));
     dbUser = userRes[0] || null;
     isOnboarded = dbUser?.onboardingCompleted ?? false;
+    
+    if (!isOnboarded && dbUser) {
+      initialCategories = await db.select().from(categories).where(eq(categories.userId, dbUser.id));
+    }
   }
 
   return (
@@ -51,7 +56,7 @@ export default async function RootLayout({
           </div>
         ) : (
           <main className="w-full min-h-screen flex items-center justify-center p-4 sm:p-6 lg:p-8">
-            {dbUser && <OnboardingWizard user={dbUser} />}
+            {dbUser && <OnboardingWizard user={dbUser} initialCategories={initialCategories} />}
           </main>
         )}
       </body>

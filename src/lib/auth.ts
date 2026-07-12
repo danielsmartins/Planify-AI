@@ -61,6 +61,9 @@ export async function register(formData: FormData) {
   const email = formData.get('email') as string;
   const phone = formData.get('phone') as string;
   const password = formData.get('password') as string;
+  const age = formData.get('age') as string;
+  const incomeRange = formData.get('incomeRange') as string;
+  const financialGoal = formData.get('financialGoal') as string;
 
   if (!name || !email || !password) return { error: 'Preencha todos os campos obrigatórios.' };
 
@@ -72,6 +75,9 @@ export async function register(formData: FormData) {
       email,
       phone: phone || null,
       password: hashedPassword,
+      age: age ? parseInt(age, 10) : null,
+      incomeRange: incomeRange || null,
+      financialGoal: financialGoal || null,
     }).returning();
     
     await db.insert(categories).values([
