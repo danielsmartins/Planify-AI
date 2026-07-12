@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, numeric, uuid } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, numeric, uuid, boolean } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -7,6 +7,7 @@ export const users = pgTable('users', {
   phone: text('phone').unique(), // Tornando opcional
   telegramChatId: text('telegram_chat_id'), // Para conectar com o bot
   password: text('password').notNull(),
+  onboardingCompleted: boolean('onboarding_completed').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/db';
-import { transactions, installments, creditCards, accounts } from '@/db/schema';
+import { transactions, installments, creditCards, accounts, users } from '@/db/schema';
 import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { eq, and } from 'drizzle-orm';
@@ -328,3 +328,81 @@ export async function createInstallmentPurchase(formData: FormData) {
   revalidatePath('/installments');
   return { success: true };
 }
+
+export async function completeOnboarding(
+  formData: FormData,
+  expensesList: Array<{ description: string; amount: number; category: string; date: string }>
+) {
+  const session = await getSession();
+  if (!session) return { error: 'Não autorizado' };
+
+  const accountName = formData.get('accountName') as string;
+  const accountType = formData.get('accountType') as 'checking' | 'savings' | 'investment' | 'cash';
+  const accountColor = formData.get('accountColor') as string;
+  const accountBalance = formData.get('accountBalance') as string;
+
+  if (!accountName || !accountType || !accountColor || !accountBalance) {
+    return { error: 'Preencha todos os campos obrigatórios da conta bancária.' };
+  }
+
+  try {
+    // 1. Criar a conta bancária inicial com o saldo informado
+    const [newAccount] = await db.insert(accounts).values({
+      userId: session.user.id,
+      name: accountName,
+      type: accountType,
+      color: accountColor,
+      balance: parseFloat(accountBalance).toString(),
+    }).returning();
+
+    // 2. Criar os gastos listados (se houver)
+    if (expensesList && expensesList.length > 0) {
+      const txValues = expensesList.map(exp => {
+        const dateObj = exp.date ? new Date(exp.date) : new Date();
+        const finalDate = isNaN(dateObj.getTime()) ? new Date() : dateObj;
+        
+        return {
+          userId: session.user.id,
+          amount: exp.amount.toString(),
+          description: exp.description,
+          category: exp.category || 'Outros',
+          type: 'expense' as const,
+          accountId: newAccount.id,
+          createdAt: finalDate,
+        };
+      });
+      await db.insert(transactions).values(txValues);
+    }
+
+    // 3. Atualizar o status de onboardingCompleted do usuário
+    await db.update(users)
+      .set({ onboardingCompleted: true })
+      .where(eq(users.id, session.user.id));
+
+    revalidatePath('/');
+    revalidatePath('/accounts');
+    revalidatePath('/transactions');
+    return { success: true };
+  } catch (e) {
+    console.error('Erro no onboarding:', e);
+    return { error: 'Erro ao salvar os dados iniciais. Tente novamente.' };
+  }
+}
+
+export async function skipOnboarding() {
+  const session = await getSession();
+  if (!session) return { error: 'Não autorizado' };
+
+  try {
+    await db.update(users)
+      .set({ onboardingCompleted: true })
+      .where(eq(users.id, session.user.id));
+
+    revalidatePath('/');
+    return { success: true };
+  } catch (e) {
+    console.error('Erro ao pular o onboarding:', e);
+    return { error: 'Erro ao pular o passo a passo.' };
+  }
+}
+

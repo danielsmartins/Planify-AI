@@ -3,6 +3,10 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { TopNav } from "@/components/layout/TopNav";
 import { getSession } from "@/lib/auth";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { OnboardingWizard } from "@/components/dashboard/OnboardingWizard";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,18 +29,33 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const session = await getSession();
+  let isOnboarded = true;
+  let dbUser = null;
+
+  if (session) {
+    const userRes = await db.select().from(users).where(eq(users.id, session.user.id));
+    dbUser = userRes[0] || null;
+    isOnboarded = dbUser?.onboardingCompleted ?? false;
+  }
 
   return (
     <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable} antialiased dark`}>
       <body suppressHydrationWarning className="bg-[#000000] text-slate-100 min-h-screen relative">
         <div className="noise-overlay" />
-        <div className="flex flex-col lg:flex-row min-h-screen">
-          <TopNav />
-          <main className={`flex-1 ${session ? 'lg:pl-72' : ''} p-4 sm:p-6 lg:p-8 w-full max-w-7xl mx-auto lg:max-w-none`}>
-            {children}
+        {isOnboarded ? (
+          <div className="flex flex-col lg:flex-row min-h-screen">
+            <TopNav />
+            <main className={`flex-1 ${session ? 'lg:pl-72' : ''} p-4 sm:p-6 lg:p-8 w-full max-w-7xl mx-auto lg:max-w-none`}>
+              {children}
+            </main>
+          </div>
+        ) : (
+          <main className="w-full min-h-screen flex items-center justify-center p-4 sm:p-6 lg:p-8">
+            {dbUser && <OnboardingWizard user={dbUser} />}
           </main>
-        </div>
+        )}
       </body>
     </html>
   );
 }
+
