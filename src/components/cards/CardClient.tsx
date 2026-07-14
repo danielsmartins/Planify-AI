@@ -15,6 +15,8 @@ interface CardProps {
   limitAmount: string | null;
   brand: string;
   invoiceAmount?: string;
+  autoPay?: boolean;
+  autoPayAccountId?: string | null;
 }
 
 interface AccountProps {
@@ -58,6 +60,8 @@ export function CardClient({
   const [formName, setFormName] = useState('');
   const [formColor, setFormColor] = useState('#10b981');
   const [formBrand, setFormBrand] = useState('mastercard');
+  const [autoPayChecked, setAutoPayChecked] = useState(false);
+  const [autoPayAccountId, setAutoPayAccountId] = useState('');
 
   // Import Invoice State
   const [isImporting, setIsImporting] = useState(false);
@@ -174,11 +178,11 @@ export function CardClient({
           </button>
           
           <button 
-            onClick={() => setIsAdding(true)}
-            className="flex items-center gap-2 bg-brand hover:bg-brand-light text-black px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer"
+            onClick={() => { setIsAdding(true); setAutoPayChecked(false); setAutoPayAccountId(''); setFormName(''); setFormColor('#10b981'); setFormBrand('mastercard'); }}
+            className="flex items-center gap-2 bg-brand hover:bg-brand-light text-black font-semibold px-4 py-2.5 rounded-xl transition-all cursor-pointer shadow-md select-none text-sm shrink-0"
           >
             <Plus size={16} />
-            <span className="hidden sm:inline">Adicionar Cartão</span>
+            Novo Cartão
           </button>
         </div>
       </div>
@@ -230,6 +234,8 @@ export function CardClient({
                         setFormName(card.name);
                         setFormColor(card.color);
                         setFormBrand(card.brand || 'mastercard');
+                        setAutoPayChecked(card.autoPay || false);
+                        setAutoPayAccountId(card.autoPayAccountId || '');
                       }}
                       className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors backdrop-blur-md cursor-pointer"
                     >
@@ -290,6 +296,12 @@ export function CardClient({
                 </div>
                 
                 <div className="flex flex-col items-end gap-2 shrink-0">
+                  {card.autoPay && (
+                     <div className="bg-white/20 text-white text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-md">
+                        Auto-Pay
+                     </div>
+                  )}
+
                   {/* Brand Logo Text */}
                   <div className="text-white/80 font-bold italic tracking-wider text-xl uppercase opacity-90" style={{ fontFamily: 'sans-serif' }}>
                     {card.brand === 'mastercard' && (
@@ -329,8 +341,8 @@ export function CardClient({
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md relative animate-in fade-in zoom-in duration-200">
             <button 
-              onClick={() => { setIsAdding(false); setEditingCard(null); setFormName(''); setFormColor('#10b981'); setFormBrand('mastercard'); }} 
-              className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
+              onClick={() => { setIsAdding(false); setEditingCard(null); setFormName(''); setFormColor('#10b981'); setFormBrand('mastercard'); setAutoPayChecked(false); setAutoPayAccountId(''); }} 
+              className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-slate-100 rounded-lg transition-colors cursor-pointer"
             >
               <X size={20}/>
             </button>
@@ -431,6 +443,40 @@ export function CardClient({
                   className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-3 py-2 text-sm text-slate-100 focus:border-brand focus:outline-none transition-colors"
                 />
               </div>
+
+              <div className="flex items-center gap-3 py-2">
+                <input 
+                  type="checkbox" 
+                  name="autoPay"
+                  id="autoPay"
+                  checked={autoPayChecked}
+                  onChange={(e) => setAutoPayChecked(e.target.checked)}
+                  className="rounded border-slate-700/50 bg-slate-900/50 text-brand focus:ring-brand focus:ring-offset-slate-900 cursor-pointer"
+                />
+                <label htmlFor="autoPay" className="text-sm text-slate-300 cursor-pointer select-none">
+                  Pagar fatura automaticamente no vencimento
+                </label>
+              </div>
+
+              {autoPayChecked && (
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">Debitar da Conta / Carteira</label>
+                  <select 
+                    name="autoPayAccountId"
+                    value={autoPayAccountId}
+                    onChange={(e) => setAutoPayAccountId(e.target.value)}
+                    required
+                    className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-3 py-2 text-sm text-slate-100 focus:border-brand focus:outline-none transition-colors"
+                  >
+                    <option value="">Selecione uma conta...</option>
+                    {accounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <button 
                 type="submit"
@@ -660,6 +706,11 @@ export function CardClient({
                     <span className="text-xs text-slate-400 uppercase tracking-wider block font-semibold">Fatura de {now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</span>
                     <p className="text-3xl font-extrabold text-white mt-1">{formatBRL(currentInvoiceTotal > 0 ? currentInvoiceTotal : 0)}</p>
                     <span className="text-xs text-slate-500 block mt-1.5">Vencimento: {currentInvoiceDates.due} (Fechamento: {currentInvoiceDates.closing})</span>
+                    {viewingCardDetails.autoPay && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold mt-2 px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 border-dashed">
+                        Débito Automático Ativado ({accounts.find(a => a.id === viewingCardDetails.autoPayAccountId)?.name || 'Conta'})
+                      </span>
+                    )}
                   </div>
                   {currentInvoiceTotal > 0 && (
                     <button

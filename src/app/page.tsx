@@ -9,6 +9,7 @@ import { ExpensesChart } from '@/components/dashboard/ExpensesChart';
 import { AiAdvisor } from '@/components/dashboard/AiAdvisor';
 import { LandingPage } from '@/components/layout/LandingPage';
 import { NetWorthChart } from '@/components/dashboard/NetWorthChart';
+import { processAutoPayments } from '@/lib/auto-pay';
 
 export default async function Home({
   searchParams,
@@ -20,6 +21,9 @@ export default async function Home({
   if (!session) {
     return <LandingPage />;
   }
+
+  // Executa pagamentos automáticos pendentes
+  await processAutoPayments(session.user.id);
 
   const firstName = session.user.name.split(' ')[0];
 
@@ -57,6 +61,15 @@ export default async function Home({
     .where(and(...conditions))
     .orderBy(desc(transactions.createdAt));
 
+  // Buscar todos os pagamentos de fatura para saber quais faturas estão pagas
+  const invoicePayments = await db.select()
+    .from(transactions)
+    .where(and(
+      eq(transactions.userId, session.user.id),
+      eq(transactions.status, 'confirmed'),
+      sql`account_id IS NOT NULL AND credit_card_id IS NOT NULL`
+    ));
+
   // Buscar contas, categorias, cartões e assinaturas
   const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, session.user.id));
   const userCategories = await db.select().from(categories).where(eq(categories.userId, session.user.id));
@@ -80,6 +93,7 @@ export default async function Home({
     accountId: string | null;
     createdAt: Date;
     isProjected?: boolean;
+    isPendingPayment?: boolean;
   }
 
   const projectedTxs: ExtendedTransaction[] = [];
@@ -129,8 +143,20 @@ export default async function Home({
 
   // Mesclar transações e ordenar por data decrescente
   const allTxs: ExtendedTransaction[] = [
-    ...userTransactions.map(tx => ({ ...tx, isProjected: false })),
-    ...projectedTxs
+    ...userTransactions.map(tx => {
+      let isPendingPayment = false;
+      if (tx.type === 'expense' && tx.creditCardId && !tx.accountId) {
+        const txDate = new Date(tx.createdAt);
+        const hasPayment = invoicePayments.some(p => 
+          p.creditCardId === tx.creditCardId && 
+          new Date(p.createdAt).getMonth() === txDate.getMonth() && 
+          new Date(p.createdAt).getFullYear() === txDate.getFullYear()
+        );
+        isPendingPayment = !hasPayment;
+      }
+      return { ...tx, isProjected: false, isPendingPayment };
+    }),
+    ...projectedTxs.map(tx => ({ ...tx, isPendingPayment: false }))
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const latestTransactions = allTxs.slice(0, 10);
@@ -438,6 +464,7 @@ export default async function Home({
                           creditCardName={tx.creditCardId ? (userCards.find(c => c.id === tx.creditCardId)?.name) : null}
                           categoriesList={userCategories}
                           isProjected={tx.isProjected}
+                          isPendingPayment={tx.isPendingPayment}
                         />
                       ))}
                     </tbody>

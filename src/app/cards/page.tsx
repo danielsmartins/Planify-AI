@@ -4,12 +4,16 @@ import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { eq, and, sql } from 'drizzle-orm';
 import { CardClient } from '@/components/cards/CardClient';
+import { processAutoPayments } from '@/lib/auto-pay';
 
 export default async function CardsPage() {
   const session = await getSession();
   if (!session) {
     redirect('/login');
   }
+
+  // Processa faturas com pagamento automático vencidas
+  await processAutoPayments(session.user.id);
 
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -42,7 +46,9 @@ export default async function CardsPage() {
       dueDay: card.dueDay,
       limitAmount: card.limitAmount,
       brand: card.brand,
-      invoiceAmount: outstanding.toString()
+      invoiceAmount: outstanding.toString(),
+      autoPay: card.autoPay,
+      autoPayAccountId: card.autoPayAccountId
     };
   });
 

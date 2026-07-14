@@ -66,6 +66,8 @@ export const creditCards = pgTable('credit_cards', {
   dueDay: numeric('due_day').notNull(),
   limitAmount: numeric('limit_amount').default('0'),
   brand: text('brand').default('mastercard').notNull(),
+  autoPay: boolean('auto_pay').default(false).notNull(),
+  autoPayAccountId: uuid('auto_pay_account_id').references(() => accounts.id),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

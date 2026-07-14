@@ -16,6 +16,8 @@ export async function addCreditCard(formData: FormData) {
   const dueDay = formData.get('dueDay') as string;
   const limitAmount = formData.get('limitAmount') as string;
   const brand = formData.get('brand') as string;
+  const autoPay = formData.get('autoPay') === 'on';
+  const autoPayAccountId = formData.get('autoPayAccountId') as string || null;
 
   if (!name || !color || !closingDay || !dueDay || !brand) throw new Error('Invalid data');
 
@@ -27,6 +29,8 @@ export async function addCreditCard(formData: FormData) {
     dueDay,
     limitAmount: limitAmount ? parseFloat(limitAmount).toString() : '0',
     brand,
+    autoPay,
+    autoPayAccountId: autoPayAccountId || null,
   });
 
   revalidatePath('/cards');
@@ -73,6 +77,8 @@ export async function updateCreditCard(id: string, formData: FormData) {
   const dueDay = formData.get('dueDay') as string;
   const limitAmount = formData.get('limitAmount') as string;
   const brand = formData.get('brand') as string;
+  const autoPay = formData.get('autoPay') === 'on';
+  const autoPayAccountId = formData.get('autoPayAccountId') as string || null;
 
   if (!name || !color || !closingDay || !dueDay || !brand) throw new Error('Invalid data');
 
@@ -83,6 +89,8 @@ export async function updateCreditCard(id: string, formData: FormData) {
     dueDay,
     limitAmount: limitAmount ? parseFloat(limitAmount).toString() : '0',
     brand,
+    autoPay,
+    autoPayAccountId: autoPayAccountId || null,
   }).where(
     and(
       eq(creditCards.id, id),

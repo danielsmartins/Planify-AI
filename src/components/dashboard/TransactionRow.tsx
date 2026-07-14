@@ -20,6 +20,7 @@ interface TransactionProps {
   creditCardName?: string | null;
   categoriesList?: { id: string, name: string }[];
   isProjected?: boolean;
+  isPendingPayment?: boolean;
 }
 
 const CategoryIcon = ({ category, type }: { category: string, type: TransactionType }) => {
@@ -45,7 +46,8 @@ export function TransactionRow({
   accountName,
   creditCardName,
   categoriesList = [],
-  isProjected = false
+  isProjected = false,
+  isPendingPayment = false
 }: TransactionProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -110,7 +112,7 @@ export function TransactionRow({
           )}
         </td>
         <td className="py-3 px-4">
-          {isProjected ? (
+          {(isProjected || isPendingPayment) ? (
             <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 border-dashed">
               PREVISTO
             </span>
