@@ -1,10 +1,10 @@
 'use server';
 
 import { db } from '@/db';
-import { installments, transactions } from '@/db/schema';
+import { installments, transactions, creditCards } from '@/db/schema';
 import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 export async function deleteInstallment(id: string) {
   const session = await getSession();
@@ -37,15 +37,29 @@ export async function updateInstallment(id: string, formData: FormData) {
 
   const description = formData.get('description') as string;
   const category = formData.get('category') as string;
+  const installmentAmount = parseFloat(formData.get('amount') as string);
+  const installmentsCount = parseInt(formData.get('installmentsCount') as string);
+  const paidCount = parseInt(formData.get('paidCount') as string);
+  const creditCardId = formData.get('creditCardId') as string | null;
+  const accountId = formData.get('accountId') as string | null;
 
-  if (!description || !category) {
-    throw new Error('Invalid data');
+  if (!description || !category || isNaN(installmentAmount) || isNaN(installmentsCount) || isNaN(paidCount)) {
+    throw new Error('Preencha todos os campos corretamente.');
   }
 
-  // Update only description and category for simplicity right now
+  if (paidCount > installmentsCount) {
+    throw new Error('A quantidade de parcelas pagas não pode ser maior que o total de parcelas.');
+  }
+
+  const totalAmount = installmentAmount * installmentsCount;
+
+  // Atualizar o registro mestre de installments
   await db.update(installments).set({
     description,
-    category
+    category,
+    totalAmount: totalAmount.toString(),
+    installmentsCount: installmentsCount.toString(),
+    creditCardId: creditCardId || null,
   }).where(
     and(
       eq(installments.id, id),
@@ -53,13 +67,58 @@ export async function updateInstallment(id: string, formData: FormData) {
     )
   );
 
-  // Sync description and category on linked transactions
-  await db.execute(sql`
-    UPDATE transactions 
-    SET description = regexp_replace(description, '^.* (\\(\\d+/\\d+\\))$', ${description} || ' \\1'),
-        category = ${category}
-    WHERE installment_id = ${id} AND user_id = ${session.user.id}
-  `);
+  // Apagar as transações anteriores vinculadas a esse installmentId
+  await db.delete(transactions).where(
+    and(
+      eq(transactions.installmentId, id),
+      eq(transactions.userId, session.user.id)
+    )
+  );
+
+  let cardClosingDay = 0;
+  let cardDueDay = 0;
+
+  if (creditCardId) {
+    const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, creditCardId));
+    if (cardRes.length > 0) {
+      cardClosingDay = Number(cardRes[0].closingDay);
+      cardDueDay = Number(cardRes[0].dueDay);
+    }
+  }
+
+  // Recriar as transações futuras baseadas na parcela atual
+  const txValues = [];
+  const now = new Date();
+  const currentInstallment = paidCount + 1;
+
+  for (let i = currentInstallment; i <= installmentsCount; i++) {
+    const baseDate = new Date(now);
+    baseDate.setMonth(now.getMonth() + (i - currentInstallment));
+    
+    let txDate = baseDate;
+    if (cardClosingDay > 0 && cardDueDay > 0) {
+      const targetDate = new Date(now);
+      targetDate.setMonth(now.getMonth() + (i - currentInstallment));
+      targetDate.setDate(cardDueDay);
+      txDate = targetDate;
+    }
+
+    txValues.push({
+      userId: session.user.id,
+      amount: installmentAmount.toString(),
+      description: `${description} (${i}/${installmentsCount})`,
+      category: category,
+      type: 'expense' as const,
+      installmentId: id,
+      creditCardId: creditCardId || null,
+      accountId: accountId || null,
+      createdAt: txDate,
+    });
+  }
+
+  if (txValues.length > 0) {
+    await db.insert(transactions).values(txValues);
+  }
 
   revalidatePath('/installments');
   revalidatePath('/');

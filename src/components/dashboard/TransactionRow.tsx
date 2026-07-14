@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useTransition } from 'react';
-import { ArrowDownLeft, Coffee, ShoppingBag, Car, DollarSign, Edit2, Trash2, X } from 'lucide-react';
+import { ArrowDownLeft, Coffee, ShoppingBag, Car, DollarSign, Edit2, Trash2, X, Calendar } from 'lucide-react';
 import { deleteTransaction, updateTransaction } from '@/app/actions';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export type TransactionType = 'income' | 'expense';
 
@@ -18,6 +19,7 @@ interface TransactionProps {
   accountName?: string | null;
   creditCardName?: string | null;
   categoriesList?: { id: string, name: string }[];
+  isProjected?: boolean;
 }
 
 const CategoryIcon = ({ category, type }: { category: string, type: TransactionType }) => {
@@ -42,7 +44,8 @@ export function TransactionRow({
   creditCardId,
   accountName,
   creditCardName,
-  categoriesList = [] 
+  categoriesList = [],
+  isProjected = false
 }: TransactionProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -82,7 +85,7 @@ export function TransactionRow({
 
   return (
     <>
-      <tr className="border-b border-neutral-900/60 hover:bg-neutral-900/20 transition-colors group text-xs text-neutral-300">
+      <tr className={`border-b border-neutral-900/60 hover:bg-neutral-900/20 transition-colors group text-xs text-neutral-300 ${isProjected ? 'opacity-60 border-dashed' : ''}`}>
         <td className="py-3 px-4 font-medium text-neutral-500">
           {date}
         </td>
@@ -107,31 +110,39 @@ export function TransactionRow({
           )}
         </td>
         <td className="py-3 px-4">
-          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${type === 'income' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-neutral-800 text-neutral-400 border border-neutral-700/50'}`}>
-            {type === 'income' ? 'RECEBIDO' : 'PAGO'}
-          </span>
+          {isProjected ? (
+            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 border-dashed">
+              PREVISTO
+            </span>
+          ) : (
+            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${type === 'income' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-neutral-800 text-neutral-400 border border-neutral-700/50'}`}>
+              {type === 'income' ? 'RECEBIDO' : 'PAGO'}
+            </span>
+          )}
         </td>
         <td className="py-3 px-4 text-right font-semibold text-sm">
           <div className="flex items-center justify-end gap-3">
             {/* Ações (invisíveis por padrão, aparecem no hover) */}
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button 
-                onClick={() => setIsEditing(true)}
-                disabled={isPending}
-                className="p-1.5 text-slate-500 hover:text-white transition-colors disabled:opacity-50 cursor-pointer"
-                title="Editar"
-              >
-                <Edit2 size={13} />
-              </button>
-              <button 
-                onClick={handleDelete}
-                disabled={isPending}
-                className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors disabled:opacity-50 cursor-pointer"
-                title="Excluir"
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
+            {!isProjected && (
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button 
+                  onClick={() => setIsEditing(true)}
+                  disabled={isPending}
+                  className="p-1.5 text-slate-500 hover:text-white transition-colors disabled:opacity-50 cursor-pointer"
+                  title="Editar"
+                >
+                  <Edit2 size={13} />
+                </button>
+                <button 
+                  onClick={handleDelete}
+                  disabled={isPending}
+                  className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors disabled:opacity-50 cursor-pointer"
+                  title="Excluir"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            )}
             <span className={type === 'income' ? 'text-emerald-400' : 'text-slate-100'}>
               {type === 'income' ? '+' : '-'}{formattedAmount}
             </span>
@@ -176,5 +187,87 @@ export function TransactionRow({
         </div>
       )}
     </>
+  );
+}
+
+interface DashboardFiltersProps {
+  currentMonth: string;
+  planned: boolean;
+}
+
+export function DashboardFilters({ currentMonth, planned }: DashboardFiltersProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Gerar lista de meses de -3 a +12 a partir do mês atual
+  const months = React.useMemo(() => {
+    const now = new Date();
+    const list = [];
+    for (let i = -3; i <= 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      
+      // Formatar rótulo como "Julho de 2026"
+      const label = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      const capitalizedLabel = label.charAt(0).toUpperCase() + label.slice(1);
+      list.push({ value, label: capitalizedLabel });
+    }
+    return list;
+  }, []);
+
+  const updateParams = (newMonth: string, newPlanned: boolean) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('month', newMonth);
+    params.set('planned', newPlanned ? 'true' : 'false');
+    router.push(`/?${params.toString()}`);
+  };
+
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 mb-8 bg-[#0a0a0a] border border-neutral-800 rounded-2xl">
+      {/* Month Selector */}
+      <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-850 shrink-0 text-slate-400">
+          <Calendar size={16} />
+        </div>
+        <div className="relative w-full sm:w-64">
+          <select
+            value={currentMonth}
+            onChange={(e) => updateParams(e.target.value, planned)}
+            className="w-full bg-neutral-900 border border-neutral-850 hover:border-neutral-800 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-neutral-700 transition-colors appearance-none cursor-pointer pr-10"
+          >
+            {months.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-500 text-[9px]">
+            ▼
+          </div>
+        </div>
+      </div>
+
+      {/* Planned Expenses Toggle */}
+      <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto border-t border-neutral-900 sm:border-0 pt-3 sm:pt-0">
+        <span className="text-xs font-medium text-neutral-400">
+          Incluir gastos previstos (projeções)
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={planned}
+          onClick={() => updateParams(currentMonth, !planned)}
+          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+            planned ? 'bg-violet-600' : 'bg-neutral-850'
+          }`}
+        >
+          <span
+            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+              planned ? 'translate-x-4' : 'translate-x-0'
+            }`}
+          />
+        </button>
+      </div>
+    </div>
   );
 }

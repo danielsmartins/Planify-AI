@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getSession, logout } from '@/lib/auth';
-import { LayoutDashboard, Tags, Sparkles, CreditCard, Wallet, BarChart2, Landmark, RotateCcw, LogOut } from 'lucide-react';
+import { LayoutDashboard, Tags, Sparkles, CreditCard, Wallet, BarChart2, Landmark, RotateCcw, LogOut, Settings } from 'lucide-react';
 import { MobileMenu } from './MobileMenu';
 
 export async function TopNav() {
@@ -61,6 +61,11 @@ export async function TopNav() {
             <Link href="/cards" className="flex items-center gap-3 text-sm font-medium text-slate-400 hover:text-white transition-colors px-3 py-2.5 rounded-xl hover:bg-neutral-900/50">
               <CreditCard size={18} />
               <span>Cartões</span>
+            </Link>
+
+            <Link href="/settings" className="flex items-center gap-3 text-sm font-medium text-slate-400 hover:text-white transition-colors px-3 py-2.5 rounded-xl hover:bg-neutral-900/50">
+              <Settings size={18} />
+              <span>Configurações</span>
             </Link>
           </nav>
         </div>

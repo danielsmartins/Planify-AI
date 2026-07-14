@@ -51,6 +51,8 @@ export default async function InstallmentsPage() {
       paidCount: totalPaid,
       installmentValue: installmentValue.toString(),
       remainingAmount: remainingAmount.toString(),
+      accountId: generatedTxs[0]?.accountId || null,
+      creditCardId: inst.creditCardId || null,
       createdAt: inst.createdAt
     };
   });

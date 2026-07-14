@@ -14,6 +14,8 @@ interface InstallmentProps {
   paidCount: number;
   installmentValue: string;
   remainingAmount: string;
+  accountId?: string | null;
+  creditCardId?: string | null;
 }
 
 export function InstallmentClient({ 
@@ -45,6 +47,22 @@ export function InstallmentClient({
     if (!editingInstallment) return;
     
     const formData = new FormData(e.currentTarget);
+    
+    // Extrair forma de pagamento para preencher accountId/creditCardId antes de enviar
+    const paymentMethod = formData.get('paymentMethod') as string | null;
+    if (paymentMethod) {
+      if (paymentMethod.startsWith('account_')) {
+        formData.set('accountId', paymentMethod.replace('account_', ''));
+        formData.set('creditCardId', '');
+      } else if (paymentMethod.startsWith('card_')) {
+        formData.set('creditCardId', paymentMethod.replace('card_', ''));
+        formData.set('accountId', '');
+      }
+    } else {
+      formData.set('accountId', '');
+      formData.set('creditCardId', '');
+    }
+
     startTransition(() => {
       updateInstallment(editingInstallment.id, formData).then(() => {
         setEditingInstallment(null);
@@ -160,6 +178,7 @@ export function InstallmentClient({
                         <Trash2 size={16} />
                       </button>
                     </div>
+
                   </div>
 
                   <div className="space-y-1">
@@ -192,15 +211,14 @@ export function InstallmentClient({
       {/* Modal de Edição */}
       {editingInstallment && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="glass-panel p-6 rounded-2xl w-full max-w-md relative animate-in fade-in zoom-in duration-200">
+          <div className="glass-panel p-6 rounded-2xl w-full max-w-md relative animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
             <button 
               onClick={() => setEditingInstallment(null)} 
               className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
             >
               <X size={20}/>
             </button>
-            <h2 className="text-xl font-bold mb-2">Editar Parcelamento</h2>
-            <p className="text-xs text-slate-400 mb-6">Por enquanto, só é possível alterar a descrição e a categoria do parcelamento.</p>
+            <h2 className="text-xl font-bold mb-6">Editar Parcelamento</h2>
 
             <form onSubmit={handleEdit} className="flex flex-col gap-4">
               <div>
@@ -210,20 +228,107 @@ export function InstallmentClient({
                   name="description" 
                   required
                   defaultValue={editingInstallment.description}
-                  className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-3 py-2 text-sm text-slate-100 focus:border-brand focus:outline-none transition-colors"
+                  className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus-border-brand transition-colors"
                 />
               </div>
-              
+
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Valor da Parcela (R$)</label>
+                <input 
+                  type="number" 
+                  name="amount" 
+                  step="0.01" 
+                  required
+                  defaultValue={editingInstallment.installmentValue}
+                  className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors"
+                />
+              </div>
+
               <div>
                 <label className="block text-sm text-slate-300 mb-1">Categoria</label>
-                <input 
-                  type="text" 
-                  name="category" 
-                  required
-                  defaultValue={editingInstallment.category}
-                  className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-3 py-2 text-sm text-slate-100 focus:border-brand focus:outline-none transition-colors"
-                />
+                {categories.length > 0 ? (
+                  <select 
+                    name="category" 
+                    required 
+                    defaultValue={editingInstallment.category}
+                    className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors"
+                  >
+                    {categories.map(c => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input 
+                    type="text" 
+                    name="category" 
+                    required 
+                    defaultValue={editingInstallment.category}
+                    className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors"
+                  />
+                )}
               </div>
+
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Forma de Pagamento (Pix, Débito ou Crédito)</label>
+                <select 
+                  name="paymentMethod" 
+                  required 
+                  defaultValue={
+                    editingInstallment.accountId 
+                      ? `account_${editingInstallment.accountId}` 
+                      : editingInstallment.creditCardId 
+                        ? `card_${editingInstallment.creditCardId}` 
+                        : ""
+                  }
+                  className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors"
+                >
+                  <option value="" disabled>Selecione onde será cobrado</option>
+                  {accounts.length > 0 && (
+                    <optgroup label="Contas / Carteiras (Débito/Pix)" className="bg-slate-950 text-slate-300">
+                      {accounts.map(a => (
+                        <option key={a.id} value={`account_${a.id}`}>{a.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {creditCards.length > 0 && (
+                    <optgroup label="Cartões de Crédito" className="bg-slate-950 text-slate-300">
+                      {creditCards.map(c => (
+                        <option key={c.id} value={`card_${c.id}`}>{c.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">Qtd. de Parcelas</label>
+                  <input 
+                    type="number" 
+                    name="installmentsCount" 
+                    min="2" 
+                    max="360" 
+                    required 
+                    defaultValue={editingInstallment.installmentsCount}
+                    className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1" title="Parcelas já pagas">Parcelas já pagas</label>
+                  <input 
+                    type="number" 
+                    name="paidCount" 
+                    min="0" 
+                    max="360" 
+                    required 
+                    defaultValue={editingInstallment.paidCount}
+                    className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors"
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-[-0.5rem]">
+                Parcelas já pagas (ex: se este mês é a parcela 9/12, coloque 8)
+              </p>
 
               <button 
                 type="submit"

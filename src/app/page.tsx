@@ -1,8 +1,8 @@
-import { TransactionRow, TransactionType } from '@/components/dashboard/TransactionRow';
+import { TransactionRow, TransactionType, DashboardFilters } from '@/components/dashboard/TransactionRow';
 import { Wallet, Send } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { db } from '@/db';
-import { transactions, categories, creditCards, accounts } from '@/db/schema';
+import { transactions, categories, creditCards, accounts, subscriptions } from '@/db/schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { ActionButtons } from '@/components/dashboard/ActionButtons';
 import { ExpensesChart } from '@/components/dashboard/ExpensesChart';
@@ -10,7 +10,11 @@ import { AiAdvisor } from '@/components/dashboard/AiAdvisor';
 import { LandingPage } from '@/components/layout/LandingPage';
 import { NetWorthChart } from '@/components/dashboard/NetWorthChart';
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
   const session = await getSession();
   
   if (!session) {
@@ -19,23 +23,120 @@ export default async function Home() {
 
   const firstName = session.user.name.split(' ')[0];
 
+  const params = await searchParams;
+  
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  const currentYear = now.getFullYear();
+  const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+  const defaultMonthStr = `${currentYear}-${currentMonth}`;
 
-  // Buscando transações reais (apenas confirmadas) e apenas do MÊS VIGENTE
+  const monthStr = typeof params.month === 'string' ? params.month : defaultMonthStr;
+  const planned = params.planned === 'true';
+
+  const [yearStr, monthIndexStr] = monthStr.split('-');
+  const year = parseInt(yearStr);
+  const monthIndex = parseInt(monthIndexStr) - 1;
+
+  const startOfMonth = new Date(year, monthIndex, 1);
+  const endOfMonth = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+
+  // Buscando transações reais (apenas confirmadas) e apenas do MÊS SELECIONADO
+  // Se planned for true, buscamos todas (confirmadas e pendentes). Se for false, apenas confirmadas.
+  const conditions = [
+    eq(transactions.userId, session.user.id),
+    sql`${transactions.createdAt} >= ${startOfMonth}`,
+    sql`${transactions.createdAt} <= ${endOfMonth}`
+  ];
+
+  if (!planned) {
+    conditions.push(eq(transactions.status, 'confirmed'));
+  }
+
   const userTransactions = await db.select()
     .from(transactions)
-    .where(and(
-      eq(transactions.userId, session.user.id),
-      eq(transactions.status, 'confirmed'),
-      sql`${transactions.createdAt} >= ${startOfMonth}`,
-      sql`${transactions.createdAt} <= ${endOfMonth}`
-    ))
+    .where(and(...conditions))
     .orderBy(desc(transactions.createdAt));
 
-  const latestTransactions = userTransactions.slice(0, 10);
+  // Buscar contas, categorias, cartões e assinaturas
+  const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, session.user.id));
+  const userCategories = await db.select().from(categories).where(eq(categories.userId, session.user.id));
+  const userCards = await db.select().from(creditCards).where(eq(creditCards.userId, session.user.id));
+  const userSubscriptions = await db.select().from(subscriptions).where(and(
+    eq(subscriptions.userId, session.user.id),
+    eq(subscriptions.status, 'active')
+  ));
 
+  // Lógica de projeção de assinaturas para o mês selecionado
+  interface ExtendedTransaction {
+    id: string;
+    userId: string;
+    amount: string;
+    description: string;
+    category: string;
+    type: 'income' | 'expense';
+    status: 'pending' | 'confirmed';
+    installmentId: string | null;
+    creditCardId: string | null;
+    accountId: string | null;
+    createdAt: Date;
+    isProjected?: boolean;
+  }
+
+  const projectedTxs: ExtendedTransaction[] = [];
+
+  if (planned) {
+    userSubscriptions.forEach((sub) => {
+      // Verificar se o vencimento cai no mês selecionado
+      const nextBilling = new Date(sub.nextBillingDate);
+      let shouldBill = false;
+      
+      if (sub.billingCycle === 'monthly') {
+        shouldBill = true;
+      } else if (sub.billingCycle === 'yearly') {
+        shouldBill = nextBilling.getMonth() === monthIndex;
+      }
+
+      if (shouldBill) {
+        // Verificar se já existe transação com a mesma descrição no mês selecionado (confirmada ou pendente)
+        const alreadyCharged = userTransactions.some(
+          (tx) => tx.description.toLowerCase().trim() === sub.name.toLowerCase().trim()
+        );
+
+        if (!alreadyCharged) {
+          const day = nextBilling.getDate();
+          const lastDayOfMonth = new Date(year, monthIndex + 1, 0).getDate();
+          const actualDay = Math.min(day, lastDayOfMonth);
+          const projectedDate = new Date(year, monthIndex, actualDay, 12, 0, 0);
+
+          projectedTxs.push({
+            id: `projected-sub-${sub.id}`,
+            userId: session.user.id,
+            amount: sub.amount,
+            description: sub.name,
+            category: sub.category,
+            type: 'expense',
+            status: 'pending',
+            installmentId: null,
+            creditCardId: sub.creditCardId || null,
+            accountId: sub.accountId || null,
+            createdAt: projectedDate,
+            isProjected: true,
+          });
+        }
+      }
+    });
+  }
+
+  // Mesclar transações e ordenar por data decrescente
+  const allTxs: ExtendedTransaction[] = [
+    ...userTransactions.map(tx => ({ ...tx, isProjected: false })),
+    ...projectedTxs
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const latestTransactions = allTxs.slice(0, 10);
+
+  // Calcular receitas e despesas exibidas no card de Saldo Total
+  // (Lógica baseada em transações reais do mês)
   let totalIncome = 0;
   let totalExpense = 0;
 
@@ -48,16 +149,12 @@ export default async function Home() {
     }
   });
 
-  // Buscar contas para saldo total consolidado
-  const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, session.user.id));
-  const userCategories = await db.select().from(categories).where(eq(categories.userId, session.user.id));
-  const userCards = await db.select().from(creditCards).where(eq(creditCards.userId, session.user.id));
-
+  // Saldo real consolidado atual
   const totalBalance = userAccounts.reduce((acc, curr) => acc + parseFloat(curr.balance), 0);
 
   const formatBRL = (val: number) => `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  // Obter dinamicamente os últimos 6 meses terminando no mês atual
+  // Obter dinamicamente os últimos 6 meses terminando no mês atual (para o NetWorthChart)
   const monthsData = [];
   const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
   for (let i = 5; i >= 0; i--) {
@@ -109,7 +206,6 @@ export default async function Home() {
   const historyData = monthsData.map((mInfo) => {
     const endOfMonthLimit = new Date(mInfo.year, mInfo.monthIndex + 1, 0, 23, 59, 59, 999);
     
-    // Se for o mês atual ou futuro, usamos o saldo final atual
     if (endOfMonthLimit >= endOfMonth) {
       return {
         month: mInfo.name,
@@ -117,7 +213,6 @@ export default async function Home() {
       };
     }
     
-    // Retroceder no tempo: desfazer transações ocorridas após o fim deste mês e até o fim do mês atual
     let historicalBalance = currentBalance;
     allConfirmedTransactions.forEach((tx) => {
       const txDate = new Date(tx.createdAt);
@@ -125,11 +220,10 @@ export default async function Home() {
         const val = parseFloat(tx.amount);
         const isCardPayment = tx.accountId && tx.creditCardId;
         if (!isCardPayment) {
-          // Desfazemos qualquer transação confirmada (seja em conta ou em cartão), pois todas afetam o patrimônio líquido
           if (tx.type === 'income') {
-            historicalBalance -= val; // desfazer ganho
+            historicalBalance -= val;
           } else {
-            historicalBalance += val; // desfazer gasto
+            historicalBalance += val;
           }
         }
       }
@@ -151,6 +245,14 @@ export default async function Home() {
     }
   });
 
+  // Se planned estiver ativo, agrupar despesas projetadas também no gráfico
+  if (planned) {
+    projectedTxs.forEach((tx) => {
+      const val = parseFloat(tx.amount);
+      categoryTotals[tx.category] = (categoryTotals[tx.category] || 0) + val;
+    });
+  }
+
   const categoryColorMap: Record<string, string> = {};
   userCategories.forEach(c => {
     categoryColorMap[c.name] = c.color;
@@ -163,6 +265,26 @@ export default async function Home() {
       color: categoryColorMap[name] || '#64748b'
     }))
     .sort((a, b) => b.value - a.value);
+
+  // Calcular receitas e despesas planejadas para o Saldo Projetado
+  let plannedIncome = 0;
+  let plannedExpense = 0;
+
+  userTransactions.forEach((tx) => {
+    const val = parseFloat(tx.amount);
+    const isCardPayment = tx.accountId && tx.creditCardId;
+    if (!isCardPayment) {
+      if (tx.type === 'income') plannedIncome += val;
+      else plannedExpense += val;
+    }
+  });
+
+  projectedTxs.forEach((tx) => {
+    const val = parseFloat(tx.amount);
+    plannedExpense += val;
+  });
+
+  const projectedBalance = totalBalance + plannedIncome - plannedExpense;
 
   return (
     <div className="py-6 transition-all duration-700 ease-out select-none">
@@ -179,6 +301,9 @@ export default async function Home() {
           <ActionButtons categories={userCategories} creditCards={userCards} accounts={userAccounts} />
         </div>
       </header>
+
+      {/* Dashboard Filters */}
+      <DashboardFilters currentMonth={monthStr} planned={planned} />
 
       {/* Telegram Link Sub-bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-neutral-950 border border-neutral-900 rounded-2xl p-4 mb-8 gap-3">
@@ -205,8 +330,8 @@ export default async function Home() {
         </div>
       </div>
 
-      {/* Top Grid (Saldo Total + NetWorthChart) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      {/* Top Grid (Saldo Total + NetWorthChart + Saldo Projetado se planejado) */}
+      <div className={`grid grid-cols-1 ${planned ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-6 mb-8`}>
         <div>
           <div className="glass-panel p-6 rounded-2xl flex flex-col justify-between h-full min-h-[220px]">
             <div>
@@ -232,8 +357,34 @@ export default async function Home() {
             </div>
           </div>
         </div>
+
+        {/* Card de Saldo Projetado (exibido apenas se planned = true) */}
+        {planned && (
+          <div>
+            <div className="glass-panel p-6 rounded-2xl flex flex-col justify-between h-full min-h-[220px] border border-dashed border-violet-500/30">
+              <div>
+                <span className="text-xs text-violet-400 font-semibold uppercase tracking-wider block mb-1">Saldo Projetado</span>
+                <div className="flex items-baseline gap-3 mb-2">
+                  <h2 className="text-3xl font-bold tracking-tight text-white">{formatBRL(projectedBalance)}</h2>
+                </div>
+                <p className="text-[10px] text-slate-500">Saldo estimado ao final do mês selecionado</p>
+              </div>
+
+              <div className="border-t border-neutral-900/60 pt-4 mt-6 grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-[10px] text-neutral-500 font-semibold block mb-0.5">Rec. Planejadas</span>
+                  <span className="text-base font-bold text-emerald-400">{formatBRL(plannedIncome)}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-neutral-500 font-semibold block mb-0.5">Desp. Planejadas</span>
+                  <span className="text-base font-bold text-rose-400">{formatBRL(plannedExpense)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         
-        <div>
+        <div className={planned ? 'lg:col-span-1' : ''}>
           <NetWorthChart history={historyData} />
         </div>
       </div>
@@ -245,10 +396,12 @@ export default async function Home() {
         <div className="lg:col-span-2">
           <section className="glass-panel rounded-2xl p-6 md:p-8 h-full">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-sm font-semibold text-slate-300">Transações Recentes</h2>
+              <h2 className="text-sm font-semibold text-slate-300">
+                {planned ? 'Transações & Projeções' : 'Transações Confirmadas'}
+              </h2>
             </div>
             
-            {userTransactions.length === 0 ? (
+            {allTxs.length === 0 ? (
               <div className="text-center py-12">
                 <div className="bg-slate-900/50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border border-neutral-800">
                   <Wallet size={24} className="text-slate-400" />
@@ -284,16 +437,17 @@ export default async function Home() {
                           accountName={tx.accountId ? (userAccounts.find(a => a.id === tx.accountId)?.name) : null}
                           creditCardName={tx.creditCardId ? (userCards.find(c => c.id === tx.creditCardId)?.name) : null}
                           categoriesList={userCategories}
+                          isProjected={tx.isProjected}
                         />
                       ))}
                     </tbody>
                   </table>
                 </div>
                 
-                {userTransactions.length > 10 && (
+                {allTxs.length > 10 && (
                   <div className="mt-2 flex justify-center">
                     <a href="/transactions" className="text-xs font-semibold text-black bg-white hover:bg-neutral-200 transition-colors px-4 py-2 rounded-xl">
-                      Ver todas ({userTransactions.length})
+                      Ver todas ({allTxs.length})
                     </a>
                   </div>
                 )}

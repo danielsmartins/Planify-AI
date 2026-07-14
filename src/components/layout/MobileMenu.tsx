@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Tags, CreditCard, Wallet, BarChart2, Landmark, RotateCcw, Menu, X, LogOut } from 'lucide-react';
+import { LayoutDashboard, Tags, CreditCard, Wallet, BarChart2, Landmark, RotateCcw, Menu, X, LogOut, Settings } from 'lucide-react';
 import { logout } from '@/lib/auth';
 
 export function MobileMenu() {
@@ -19,6 +19,7 @@ export function MobileMenu() {
     { name: 'Categorias', href: '/categories', icon: Tags },
     { name: 'Parcelamentos', href: '/installments', icon: CreditCard },
     { name: 'Cartões', href: '/cards', icon: CreditCard },
+    { name: 'Configurações', href: '/settings', icon: Settings },
   ];
 
   return (

@@ -2,7 +2,7 @@ import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { db } from '@/db';
 import { transactions, categories, accounts, creditCards } from '@/db/schema';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, lte } from 'drizzle-orm';
 import { TransactionRow, TransactionType } from '@/components/dashboard/TransactionRow';
 import Link from 'next/link';
 
@@ -27,14 +27,15 @@ export default async function TransactionsPage({
   const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, session.user.id));
   const userCards = await db.select().from(creditCards).where(eq(creditCards.userId, session.user.id));
 
-
+  const now = new Date();
 
   // Count total for pagination (todas as transações confirmadas)
   const allTxs = await db.select({ id: transactions.id })
     .from(transactions)
     .where(and(
       eq(transactions.userId, session.user.id),
-      eq(transactions.status, 'confirmed')
+      eq(transactions.status, 'confirmed'),
+      lte(transactions.createdAt, now)
     ));
     
   const totalItems = allTxs.length;
@@ -45,7 +46,8 @@ export default async function TransactionsPage({
     .from(transactions)
     .where(and(
       eq(transactions.userId, session.user.id),
-      eq(transactions.status, 'confirmed')
+      eq(transactions.status, 'confirmed'),
+      lte(transactions.createdAt, now)
     ))
     .orderBy(desc(transactions.createdAt))
     .limit(limit)
