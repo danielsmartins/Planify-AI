@@ -1,9 +1,17 @@
 import { db } from '@/db';
-import { subscriptions, transactions, accounts } from '@/db/schema';
+import { subscriptions, transactions, creditCards, accounts } from '@/db/schema';
 import { eq, and, lte } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 
-
+function calculateCreditCardDate(baseDate: Date, closingDay: number, dueDay: number): Date {
+  const resultDate = new Date(baseDate);
+  const currentDay = resultDate.getDate();
+  if (currentDay >= closingDay) {
+    resultDate.setMonth(resultDate.getMonth() + 1);
+  }
+  resultDate.setDate(dueDay);
+  return resultDate;
+}
 
 export async function GET(req: Request) {
   // Autenticação básica para o Cron Job (padrão Vercel)
@@ -38,9 +46,15 @@ export async function GET(req: Request) {
     // 2. Processar cada assinatura
     for (const sub of pendingSubs) {
       // 2.1 Calcular a data exata da transação
-      const txDate = new Date(sub.nextBillingDate);
+      let txDate = new Date(sub.nextBillingDate);
       
-      if (sub.accountId) {
+      if (sub.creditCardId) {
+        const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, sub.creditCardId));
+        if (cardRes.length > 0) {
+          const card = cardRes[0];
+          txDate = calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
+        }
+      } else if (sub.accountId) {
         // 2.2 Debitar o saldo da conta
         const accRes = await db.select().from(accounts).where(eq(accounts.id, sub.accountId));
         if (accRes.length > 0) {

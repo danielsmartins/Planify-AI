@@ -622,29 +622,27 @@ export function CardClient({
       {/* Modal de Detalhes do Cartão */}
       {viewingCardDetails && (() => {
         const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
         // Função auxiliar para calcular datas de fatura (vencimento e fechamento)
+        // O createdAt no banco de dados já armazena a data de vencimento da fatura correspondente.
         const getTxInvoiceDates = (createdAtStr: string, closingDayStr: string, dueDayStr: string) => {
           const txDate = new Date(createdAtStr);
           const closingDay = parseInt(closingDayStr);
           const dueDay = parseInt(dueDayStr);
           
-          let invoiceMonth = txDate.getMonth();
-          let invoiceYear = txDate.getFullYear();
+          let closingMonth = txDate.getMonth();
+          let closingYear = txDate.getFullYear();
           
-          // Se o dia do mês da transação for antes do fechamento, pertence ao ciclo da fatura do mês anterior
-          if (txDate.getDate() < closingDay) {
-            invoiceMonth -= 1;
-            if (invoiceMonth < 0) {
-              invoiceMonth = 11;
-              invoiceYear -= 1;
+          // Se o dia de fechamento for maior que o dia de vencimento, o fechamento ocorreu no mês anterior
+          if (closingDay > dueDay) {
+            closingMonth -= 1;
+            if (closingMonth < 0) {
+              closingMonth = 11;
+              closingYear -= 1;
             }
           }
           
-          // Vencimento e fechamento caem no mês seguinte (invoiceMonth + 1)
-          const closingDate = new Date(invoiceYear, invoiceMonth + 1, closingDay);
-          const dueDate = new Date(invoiceYear, invoiceMonth + 1, dueDay);
+          const invoiceClosingDate = new Date(closingYear, closingMonth, closingDay);
+          const invoiceDueDate = txDate;
           
           const format = (d: Date) => {
             const day = d.getDate().toString().padStart(2, '0');
@@ -652,31 +650,58 @@ export function CardClient({
             return `${day}/${month}`;
           };
           
+          // Referência da fatura (ex: vencimento em agosto -> fatura de julho)
+          let invoiceMonth = txDate.getMonth() - 1;
+          let invoiceYear = txDate.getFullYear();
+          if (invoiceMonth < 0) {
+            invoiceMonth = 11;
+            invoiceYear -= 1;
+          }
+          
           const monthName = new Date(invoiceYear, invoiceMonth, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
           
           return {
             monthName,
-            closing: format(closingDate),
-            due: format(dueDate)
+            closing: format(invoiceClosingDate),
+            due: format(invoiceDueDate)
           };
         };
 
+        // Calcular a data de vencimento da fatura atual do cartão com base no dia de hoje
+        const currentInvoiceDueDate = (() => {
+          const closingDay = parseInt(viewingCardDetails.closingDay);
+          const dueDay = parseInt(viewingCardDetails.dueDay);
+          const resultDate = new Date(now);
+          const currentDay = resultDate.getDate();
+          let monthOffset = 0;
+          if (currentDay >= closingDay) {
+            monthOffset = 1;
+          }
+          if (dueDay < closingDay) {
+            monthOffset += 1;
+          }
+          resultDate.setMonth(resultDate.getMonth() + monthOffset);
+          resultDate.setDate(dueDay);
+          return resultDate;
+        })();
+
         // Datas da fatura atual
-        const currentInvoiceDates = getTxInvoiceDates(now.toISOString(), viewingCardDetails.closingDay, viewingCardDetails.dueDay);
+        const currentInvoiceDates = getTxInvoiceDates(currentInvoiceDueDate.toISOString(), viewingCardDetails.closingDay, viewingCardDetails.dueDay);
 
         // Filtrar transações deste cartão
         const cardTxs = transactions.filter(t => t.creditCardId === viewingCardDetails.id);
         
-        // Transações da fatura atual (mês atual)
+        // Transações da fatura atual (cujo mês de vencimento é o mês da fatura atual)
         const currentInvoiceTxs = cardTxs.filter(t => {
           const tDate = new Date(t.createdAt);
-          return tDate >= startOfMonth && tDate <= endOfMonth;
+          return tDate.getMonth() === currentInvoiceDueDate.getMonth() && 
+                 tDate.getFullYear() === currentInvoiceDueDate.getFullYear();
         });
 
-        // Transações futuras (meses futuros)
+        // Transações futuras (meses de vencimento posteriores)
         const futureInvoiceTxs = cardTxs.filter(t => {
           const tDate = new Date(t.createdAt);
-          return tDate > endOfMonth;
+          return tDate.getTime() > currentInvoiceDueDate.getTime();
         });
 
         const currentInvoiceTotal = currentInvoiceTxs.filter(t => !t.accountId).reduce((sum, t) => sum + parseFloat(t.amount), 0) - currentInvoiceTxs.filter(t => t.accountId).reduce((sum, t) => sum + parseFloat(t.amount), 0);

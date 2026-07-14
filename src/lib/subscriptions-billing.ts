@@ -1,6 +1,7 @@
 import { db } from '@/db';
-import { subscriptions, transactions, accounts } from '@/db/schema';
+import { subscriptions, transactions, creditCards, accounts } from '@/db/schema';
 import { eq, and, lte } from 'drizzle-orm';
+import { calculateCreditCardDate } from '@/app/actions';
 
 export async function processPendingSubscriptions(userId: string) {
   try {
@@ -18,10 +19,17 @@ export async function processPendingSubscriptions(userId: string) {
     if (pendingSubs.length === 0) return;
 
     for (const sub of pendingSubs) {
-      const txDate = new Date(sub.nextBillingDate);
+      let txDate = new Date(sub.nextBillingDate);
 
-      // 2. Se for débito em conta (sem cartão de crédito), deduz do saldo da conta
-      if (!sub.creditCardId && sub.accountId) {
+      // 2. Se for cartão de crédito, calcula a data de vencimento da fatura correspondente
+      if (sub.creditCardId) {
+        const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, sub.creditCardId));
+        if (cardRes.length > 0) {
+          const card = cardRes[0];
+          txDate = await calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
+        }
+      } else if (sub.accountId) {
+        // Se for débito em conta, deduz do saldo da conta
         const accRes = await db.select().from(accounts).where(eq(accounts.id, sub.accountId));
         if (accRes.length > 0) {
           const acc = accRes[0];
@@ -30,7 +38,7 @@ export async function processPendingSubscriptions(userId: string) {
         }
       }
 
-      // 3. Inserir a transação real (com a data do vencimento da assinatura)
+      // 3. Inserir a transação real (com a data de vencimento correspondente)
       await db.insert(transactions).values({
         userId: sub.userId,
         amount: sub.amount,
