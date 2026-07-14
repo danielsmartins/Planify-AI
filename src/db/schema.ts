@@ -29,6 +29,7 @@ export const transactions = pgTable('transactions', {
   creditCardId: uuid('credit_card_id'),
   accountId: uuid('account_id'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  dueDate: timestamp('due_date'),
 });
 
 export const categories = pgTable('categories', {

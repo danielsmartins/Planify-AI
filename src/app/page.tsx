@@ -52,8 +52,8 @@ export default async function Home({
   // Se planned for true, buscamos todas (confirmadas e pendentes). Se for false, apenas confirmadas.
   const conditions = [
     eq(transactions.userId, session.user.id),
-    sql`${transactions.createdAt} >= ${startOfMonth}`,
-    sql`${transactions.createdAt} <= ${endOfMonth}`
+    sql`COALESCE(${transactions.dueDate}, ${transactions.createdAt}) >= ${startOfMonth}`,
+    sql`COALESCE(${transactions.dueDate}, ${transactions.createdAt}) <= ${endOfMonth}`
   ];
 
   if (!planned) {
@@ -96,6 +96,7 @@ export default async function Home({
     creditCardId: string | null;
     accountId: string | null;
     createdAt: Date;
+    dueDate?: Date | null;
     isProjected?: boolean;
     isPendingPayment?: boolean;
   }
@@ -152,11 +153,11 @@ export default async function Home({
     ...userTransactions.map(tx => {
       let isPendingPayment = false;
       if (tx.type === 'expense' && tx.creditCardId && !tx.accountId) {
-        const txDate = new Date(tx.createdAt);
+        const txDueDate = new Date(tx.dueDate || tx.createdAt);
         const hasPayment = invoicePayments.some(p => 
           p.creditCardId === tx.creditCardId && 
-          new Date(p.createdAt).getMonth() === txDate.getMonth() && 
-          new Date(p.createdAt).getFullYear() === txDate.getFullYear()
+          new Date(p.createdAt).getMonth() === txDueDate.getMonth() && 
+          new Date(p.createdAt).getFullYear() === txDueDate.getFullYear()
         );
         isPendingPayment = !hasPayment;
       }

@@ -100,8 +100,11 @@ export async function updateInstallment(id: string, formData: FormData) {
   }
 
   for (let i = currentInstallment; i <= installmentsCount; i++) {
-    const txDate = new Date(firstTxDate);
-    txDate.setMonth(firstTxDate.getMonth() + (i - currentInstallment));
+    const createdAtDate = new Date(now);
+    createdAtDate.setMonth(now.getMonth() + (i - currentInstallment));
+
+    const dueDateDate = new Date(firstTxDate);
+    dueDateDate.setMonth(firstTxDate.getMonth() + (i - currentInstallment));
 
     txValues.push({
       userId: session.user.id,
@@ -112,7 +115,8 @@ export async function updateInstallment(id: string, formData: FormData) {
       installmentId: id,
       creditCardId: creditCardId || null,
       accountId: accountId || null,
-      createdAt: txDate,
+      createdAt: createdAtDate,
+      dueDate: dueDateDate,
     });
   }
 

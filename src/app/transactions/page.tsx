@@ -55,8 +55,8 @@ export default async function TransactionsPage({
     const endOfMonth = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
     
     conditions.push(
-      sql`created_at >= ${startOfMonth}`,
-      sql`created_at <= ${endOfMonth}`
+      sql`COALESCE(${transactions.dueDate}, ${transactions.createdAt}) >= ${startOfMonth}`,
+      sql`COALESCE(${transactions.dueDate}, ${transactions.createdAt}) <= ${endOfMonth}`
     );
   }
 
@@ -79,11 +79,11 @@ export default async function TransactionsPage({
   const paginatedTransactionsWithStatus = paginatedTransactions.map(tx => {
     let isPendingPayment = false;
     if (tx.type === 'expense' && tx.creditCardId && !tx.accountId) {
-      const txDate = new Date(tx.createdAt);
+      const txDueDate = new Date(tx.dueDate || tx.createdAt);
       const hasPayment = invoicePayments.some(p => 
         p.creditCardId === tx.creditCardId && 
-        new Date(p.createdAt).getMonth() === txDate.getMonth() && 
-        new Date(p.createdAt).getFullYear() === txDate.getFullYear()
+        new Date(p.createdAt).getMonth() === txDueDate.getMonth() && 
+        new Date(p.createdAt).getFullYear() === txDueDate.getFullYear()
       );
       isPendingPayment = !hasPayment;
     }

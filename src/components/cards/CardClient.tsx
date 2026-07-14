@@ -33,6 +33,7 @@ interface CardTransactionProps {
   creditCardId: string | null;
   accountId: string | null;
   createdAt: string;
+  dueDate?: string | null;
 }
 
 export function CardClient({ 
@@ -693,14 +694,14 @@ export function CardClient({
         
         // Transações da fatura atual (cujo mês de vencimento é o mês da fatura atual)
         const currentInvoiceTxs = cardTxs.filter(t => {
-          const tDate = new Date(t.createdAt);
+          const tDate = new Date(t.dueDate || t.createdAt);
           return tDate.getMonth() === currentInvoiceDueDate.getMonth() && 
                  tDate.getFullYear() === currentInvoiceDueDate.getFullYear();
         });
 
         // Transações futuras (meses de vencimento posteriores)
         const futureInvoiceTxs = cardTxs.filter(t => {
-          const tDate = new Date(t.createdAt);
+          const tDate = new Date(t.dueDate || t.createdAt);
           return tDate.getTime() > currentInvoiceDueDate.getTime();
         });
 
@@ -763,11 +764,16 @@ export function CardClient({
                   ) : (
                     <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/10 divide-y divide-slate-800">
                       {currentInvoiceTxs.map(t => {
-                        const dates = getTxInvoiceDates(t.createdAt, viewingCardDetails.closingDay, viewingCardDetails.dueDay);
+                        const dates = getTxInvoiceDates(t.dueDate || t.createdAt, viewingCardDetails.closingDay, viewingCardDetails.dueDay);
                         return (
                           <div key={t.id} className="p-3.5 flex justify-between items-center text-sm group/item">
                             <div>
-                              <p className="font-semibold text-slate-200">{t.description}</p>
+                              <p className="font-semibold text-slate-200">
+                                {t.description}
+                                <span className="text-[10px] text-slate-400 font-normal ml-2">
+                                  ({new Date(t.createdAt).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })})
+                                </span>
+                              </p>
                               <p className="text-xs text-slate-500 mt-1">
                                 {t.category} • Vencimento: {dates.due} (Fechamento: {dates.closing})
                               </p>
@@ -814,11 +820,16 @@ export function CardClient({
                   ) : (
                     <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/10 divide-y divide-slate-800 max-h-[220px] overflow-y-auto font-sans">
                       {futureInvoiceTxs.map(t => {
-                        const dates = getTxInvoiceDates(t.createdAt, viewingCardDetails.closingDay, viewingCardDetails.dueDay);
+                        const dates = getTxInvoiceDates(t.dueDate || t.createdAt, viewingCardDetails.closingDay, viewingCardDetails.dueDay);
                         return (
                           <div key={t.id} className="p-3.5 flex justify-between items-center text-sm opacity-80 hover:opacity-100 transition-opacity group/item">
                             <div>
-                              <p className="font-semibold text-slate-300">{t.description}</p>
+                              <p className="font-semibold text-slate-300">
+                                {t.description}
+                                <span className="text-[10px] text-slate-400 font-normal ml-2">
+                                  ({new Date(t.createdAt).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })})
+                                </span>
+                              </p>
                               <p className="text-xs text-slate-500 mt-1">
                                 {t.category} • Vencimento: {dates.due} (Fechamento: {dates.closing})
                               </p>

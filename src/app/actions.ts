@@ -58,7 +58,8 @@ export async function createTransaction(formData: FormData) {
     }
   }
 
-  let txDate = new Date();
+  const txDate = new Date();
+  let txDueDate: Date | null = null;
   const parsedAmount = parseFloat(amount);
 
   // Se for despesa no cartão de crédito E não tiver conta vinculada (gasto normal no crédito)
@@ -66,7 +67,7 @@ export async function createTransaction(formData: FormData) {
     const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, creditCardId));
     if (cardRes.length > 0) {
       const card = cardRes[0];
-      txDate = await calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
+      txDueDate = await calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
     }
   }
 
@@ -92,7 +93,8 @@ export async function createTransaction(formData: FormData) {
     type: type,
     creditCardId: creditCardId || null,
     accountId: accountId || null,
-    createdAt: txDate
+    createdAt: txDate,
+    dueDate: txDueDate
   });
 
   revalidatePath('/');
@@ -146,11 +148,12 @@ export async function addTransactionViaAI(text: string) {
       }
     }
 
-    let txDate = new Date();
+    const txDate = new Date();
+    let txDueDate: Date | null = null;
     if (creditCardId && !accountId) {
       const card = userCards.find(c => c.id === creditCardId);
       if (card) {
-        txDate = await calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
+        txDueDate = await calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
       }
     }
 
@@ -162,7 +165,8 @@ export async function addTransactionViaAI(text: string) {
       type: extractedData.type as "income" | "expense",
       accountId,
       creditCardId,
-      createdAt: txDate
+      createdAt: txDate,
+      dueDate: txDueDate
     });
 
     revalidatePath('/');
@@ -303,8 +307,11 @@ export async function createInstallmentPurchase(formData: FormData) {
   }
   
   for (let i = currentInstallment; i <= installmentsCount; i++) {
-    const txDate = new Date(firstTxDate);
-    txDate.setMonth(firstTxDate.getMonth() + (i - currentInstallment));
+    const createdAtDate = new Date(now);
+    createdAtDate.setMonth(now.getMonth() + (i - currentInstallment));
+    
+    const dueDateDate = new Date(firstTxDate);
+    dueDateDate.setMonth(firstTxDate.getMonth() + (i - currentInstallment));
     
     txValues.push({
       userId: session.user.id,
@@ -315,7 +322,8 @@ export async function createInstallmentPurchase(formData: FormData) {
       installmentId: installment.id,
       creditCardId: creditCardId || null,
       accountId: accountId || null,
-      createdAt: txDate,
+      createdAt: createdAtDate,
+      dueDate: dueDateDate,
     });
   }
 

@@ -19,14 +19,15 @@ export async function processPendingSubscriptions(userId: string) {
     if (pendingSubs.length === 0) return;
 
     for (const sub of pendingSubs) {
-      let txDate = new Date(sub.nextBillingDate);
+      const createdAtDate = new Date(sub.nextBillingDate);
+      let dueDateDate = new Date(sub.nextBillingDate);
 
       // 2. Se for cartão de crédito, calcula a data de vencimento da fatura correspondente
       if (sub.creditCardId) {
         const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, sub.creditCardId));
         if (cardRes.length > 0) {
           const card = cardRes[0];
-          txDate = await calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
+          dueDateDate = await calculateCreditCardDate(dueDateDate, Number(card.closingDay), Number(card.dueDay));
         }
       } else if (sub.accountId) {
         // Se for débito em conta, deduz do saldo da conta
@@ -38,7 +39,7 @@ export async function processPendingSubscriptions(userId: string) {
         }
       }
 
-      // 3. Inserir a transação real (com a data de vencimento correspondente)
+      // 3. Inserir a transação real (com a data de ocorrência e vencimento correspondentes)
       await db.insert(transactions).values({
         userId: sub.userId,
         amount: sub.amount,
@@ -47,7 +48,8 @@ export async function processPendingSubscriptions(userId: string) {
         type: 'expense',
         creditCardId: sub.creditCardId,
         accountId: sub.accountId,
-        createdAt: txDate,
+        createdAt: createdAtDate,
+        dueDate: dueDateDate,
         status: 'confirmed'
       });
 
