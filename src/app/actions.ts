@@ -58,17 +58,8 @@ export async function createTransaction(formData: FormData) {
     }
   }
 
-  let txDate = new Date();
+  const txDate = new Date();
   const parsedAmount = parseFloat(amount);
-
-  // Se for despesa no cartão de crédito E não tiver conta vinculada (gasto normal no crédito)
-  if (creditCardId && !accountId) {
-    const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, creditCardId));
-    if (cardRes.length > 0) {
-      const card = cardRes[0];
-      txDate = await calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
-    }
-  }
 
   // Se houver conta associada (Receita, Despesa direta ou Pagamento de fatura de cartão)
   if (accountId) {
@@ -146,13 +137,7 @@ export async function addTransactionViaAI(text: string) {
       }
     }
 
-    let txDate = new Date();
-    if (creditCardId && !accountId) {
-      const card = userCards.find(c => c.id === creditCardId);
-      if (card) {
-        txDate = await calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
-      }
-    }
+    const txDate = new Date();
 
     await db.insert(transactions).values({
       userId: session.user.id,
@@ -269,16 +254,7 @@ export async function createInstallmentPurchase(formData: FormData) {
     creditCardId: creditCardId || null,
   }).returning({ id: installments.id });
 
-  let cardClosingDay = 0;
-  let cardDueDay = 0;
 
-  if (creditCardId) {
-    const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, creditCardId));
-    if (cardRes.length > 0) {
-      cardClosingDay = Number(cardRes[0].closingDay);
-      cardDueDay = Number(cardRes[0].dueDay);
-    }
-  }
 
   // Se houver conta associada, desconta o valor da parcela atual do saldo da conta
   if (accountId) {
@@ -295,14 +271,9 @@ export async function createInstallmentPurchase(formData: FormData) {
   const txValues = [];
   const now = new Date();
   
-  let firstTxDate = new Date(now);
-  if (cardClosingDay > 0 && cardDueDay > 0) {
-    firstTxDate = await calculateCreditCardDate(now, cardClosingDay, cardDueDay);
-  }
-  
   for (let i = currentInstallment; i <= installmentsCount; i++) {
-    const txDate = new Date(firstTxDate);
-    txDate.setMonth(firstTxDate.getMonth() + (i - currentInstallment));
+    const txDate = new Date(now);
+    txDate.setMonth(now.getMonth() + (i - currentInstallment));
     
     txValues.push({
       userId: session.user.id,

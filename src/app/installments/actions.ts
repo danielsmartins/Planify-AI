@@ -1,11 +1,10 @@
 'use server';
 
 import { db } from '@/db';
-import { installments, transactions, creditCards } from '@/db/schema';
+import { installments, transactions } from '@/db/schema';
 import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { eq, and } from 'drizzle-orm';
-import { calculateCreditCardDate } from '@/app/actions';
 
 export async function deleteInstallment(id: string) {
   const session = await getSession();
@@ -76,30 +75,16 @@ export async function updateInstallment(id: string, formData: FormData) {
     )
   );
 
-  let cardClosingDay = 0;
-  let cardDueDay = 0;
 
-  if (creditCardId) {
-    const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, creditCardId));
-    if (cardRes.length > 0) {
-      cardClosingDay = Number(cardRes[0].closingDay);
-      cardDueDay = Number(cardRes[0].dueDay);
-    }
-  }
 
   // Recriar as transações futuras baseadas na parcela atual
   const txValues = [];
   const now = new Date();
   const currentInstallment = paidCount + 1;
 
-  let firstTxDate = new Date(now);
-  if (cardClosingDay > 0 && cardDueDay > 0) {
-    firstTxDate = await calculateCreditCardDate(now, cardClosingDay, cardDueDay);
-  }
-
   for (let i = currentInstallment; i <= installmentsCount; i++) {
-    const txDate = new Date(firstTxDate);
-    txDate.setMonth(firstTxDate.getMonth() + (i - currentInstallment));
+    const txDate = new Date(now);
+    txDate.setMonth(now.getMonth() + (i - currentInstallment));
 
     txValues.push({
       userId: session.user.id,

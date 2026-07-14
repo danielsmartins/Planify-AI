@@ -10,6 +10,7 @@ import { AiAdvisor } from '@/components/dashboard/AiAdvisor';
 import { LandingPage } from '@/components/layout/LandingPage';
 import { NetWorthChart } from '@/components/dashboard/NetWorthChart';
 import { processAutoPayments } from '@/lib/auto-pay';
+import { processPendingSubscriptions } from '@/lib/subscriptions-billing';
 
 export default async function Home({
   searchParams,
@@ -22,7 +23,10 @@ export default async function Home({
     return <LandingPage />;
   }
 
-  // Executa pagamentos automáticos pendentes
+  // Executa cobranças automáticas de assinaturas pendentes
+  await processPendingSubscriptions(session.user.id);
+
+  // Executa pagamentos automáticos de faturas pendentes
   await processAutoPayments(session.user.id);
 
   const firstName = session.user.name.split(' ')[0];
@@ -105,7 +109,9 @@ export default async function Home({
       let shouldBill = false;
       
       if (sub.billingCycle === 'monthly') {
-        shouldBill = true;
+        const targetMonthDate = new Date(year, monthIndex, 1);
+        const billingMonthDate = new Date(nextBilling.getFullYear(), nextBilling.getMonth(), 1);
+        shouldBill = targetMonthDate >= billingMonthDate;
       } else if (sub.billingCycle === 'yearly') {
         shouldBill = nextBilling.getMonth() === monthIndex;
       }
