@@ -87,6 +87,9 @@ export function InstallmentClient({
       }
     }
     
+    const paidCount = parseInt(formData.get('paidCount') as string || '0');
+    formData.set('currentInstallment', (paidCount + 1).toString());
+    
     startTransition(async () => {
       const res = await createInstallmentPurchase(formData);
       if (res?.error) {
@@ -411,10 +414,13 @@ export function InstallmentClient({
                   <input required min="2" max="360" name="installmentsCount" type="number" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder="Ex: 12" />
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-300 mb-1" title="Em qual parcela você está agora?">Parcela Atual</label>
-                  <input required min="1" max="360" name="currentInstallment" type="number" defaultValue="1" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" />
+                  <label className="block text-sm text-slate-300 mb-1" title="Parcelas já pagas">Parcelas já pagas</label>
+                  <input required min="0" max="360" name="paidCount" type="number" defaultValue="0" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" />
                 </div>
               </div>
+              <p className="text-[10px] text-slate-400 mt-[-0.5rem]">
+                Parcelas já pagas (ex: se este mês é a parcela 9/12, coloque 8)
+              </p>
 
               <button disabled={isPending} type="submit" className="w-full bg-brand hover:bg-brand-light text-black font-semibold py-3 rounded-xl mt-4 cursor-pointer disabled:opacity-50">
                 {isPending ? 'Salvando...' : 'Adicionar Compra'}
