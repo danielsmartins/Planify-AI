@@ -55,8 +55,8 @@ export default async function TransactionsPage({
     const endOfMonth = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
     
     conditions.push(
-      sql`COALESCE(${transactions.dueDate}, ${transactions.createdAt}) >= ${startOfMonth}`,
-      sql`COALESCE(${transactions.dueDate}, ${transactions.createdAt}) <= ${endOfMonth}`
+      sql`created_at >= ${startOfMonth}`,
+      sql`created_at <= ${endOfMonth}`
     );
   }
 
@@ -128,6 +128,7 @@ export default async function TransactionsPage({
                     type={tx.type as TransactionType}
                     category={tx.category}
                     date={new Date(tx.createdAt).toLocaleDateString('pt-BR')}
+                    createdAt={new Date(tx.createdAt).toISOString()}
                     accountId={tx.accountId}
                     creditCardId={tx.creditCardId}
                     accountName={tx.accountId ? (userAccounts.find(a => a.id === tx.accountId)?.name) : null}

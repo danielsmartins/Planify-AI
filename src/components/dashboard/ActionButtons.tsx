@@ -135,6 +135,11 @@ export function ActionButtons({ categories, creditCards = [], accounts = [] }: {
                   </div>
                   
                   <div>
+                    <label className="block text-sm text-slate-300 mb-1">Data da Transação / Compra</label>
+                    <input required name="createdAt" type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors text-sm" />
+                  </div>
+                  
+                  <div>
                     <label className="block text-sm text-slate-300 mb-1">
                       {isInstallment ? "Valor da Parcela (R$)" : "Valor (R$)"}
                     </label>

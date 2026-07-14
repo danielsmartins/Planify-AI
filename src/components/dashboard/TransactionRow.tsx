@@ -21,6 +21,7 @@ interface TransactionProps {
   categoriesList?: { id: string, name: string }[];
   isProjected?: boolean;
   isPendingPayment?: boolean;
+  createdAt: string;
 }
 
 const CategoryIcon = ({ category, type }: { category: string, type: TransactionType }) => {
@@ -47,7 +48,8 @@ export function TransactionRow({
   creditCardName,
   categoriesList = [],
   isProjected = false,
-  isPendingPayment = false
+  isPendingPayment = false,
+  createdAt
 }: TransactionProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -163,6 +165,10 @@ export function TransactionRow({
               <div>
                 <label className="block text-sm text-slate-300 mb-1">Descrição</label>
                 <input required name="description" defaultValue={description} type="text" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Data da Transação</label>
+                <input required name="createdAt" defaultValue={createdAt.split('T')[0]} type="date" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors text-sm" />
               </div>
               <div>
                 <label className="block text-sm text-slate-300 mb-1">Valor (R$)</label>

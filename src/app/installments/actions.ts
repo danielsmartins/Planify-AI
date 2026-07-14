@@ -54,6 +54,9 @@ export async function updateInstallment(id: string, formData: FormData) {
 
   const totalAmount = installmentAmount * installmentsCount;
 
+  const createdAtStr = formData.get('createdAt') as string | null;
+  const selectedDate = createdAtStr ? new Date(createdAtStr + 'T12:00:00') : new Date();
+
   // Atualizar o registro mestre de installments
   await db.update(installments).set({
     description,
@@ -61,6 +64,7 @@ export async function updateInstallment(id: string, formData: FormData) {
     totalAmount: totalAmount.toString(),
     installmentsCount: installmentsCount.toString(),
     creditCardId: creditCardId || null,
+    createdAt: selectedDate,
   }).where(
     and(
       eq(installments.id, id),
@@ -76,8 +80,6 @@ export async function updateInstallment(id: string, formData: FormData) {
     )
   );
 
-
-
   let cardClosingDay = 0;
   let cardDueDay = 0;
 
@@ -91,7 +93,8 @@ export async function updateInstallment(id: string, formData: FormData) {
 
   // Recriar as transações futuras baseadas na parcela atual
   const txValues = [];
-  const now = new Date();
+  const now = new Date(selectedDate);
+  now.setMonth(now.getMonth() - paidCount);
   const currentInstallment = paidCount + 1;
 
   let firstTxDate = new Date(now);
@@ -101,10 +104,10 @@ export async function updateInstallment(id: string, formData: FormData) {
 
   for (let i = currentInstallment; i <= installmentsCount; i++) {
     const createdAtDate = new Date(now);
-    createdAtDate.setMonth(now.getMonth() + (i - currentInstallment));
+    createdAtDate.setMonth(now.getMonth() + (i - 1));
 
     const dueDateDate = new Date(firstTxDate);
-    dueDateDate.setMonth(firstTxDate.getMonth() + (i - currentInstallment));
+    dueDateDate.setMonth(firstTxDate.getMonth() + (i - 1));
 
     txValues.push({
       userId: session.user.id,

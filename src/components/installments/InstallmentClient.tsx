@@ -16,6 +16,7 @@ interface InstallmentProps {
   remainingAmount: string;
   accountId?: string | null;
   creditCardId?: string | null;
+  createdAt: string;
 }
 
 export function InstallmentClient({ 
@@ -236,6 +237,17 @@ export function InstallmentClient({
               </div>
 
               <div>
+                <label className="block text-sm text-slate-300 mb-1">Data da Compra</label>
+                <input 
+                  type="date" 
+                  name="createdAt" 
+                  required
+                  defaultValue={new Date(editingInstallment.createdAt).toISOString().split('T')[0]}
+                  className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors text-sm"
+                />
+              </div>
+
+              <div>
                 <label className="block text-sm text-slate-300 mb-1">Valor da Parcela (R$)</label>
                 <input 
                   type="number" 
@@ -367,6 +379,17 @@ export function InstallmentClient({
               <div>
                 <label className="block text-sm text-slate-300 mb-1">Descrição</label>
                 <input required name="description" type="text" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder="Ex: iPhone 15" />
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Data da Compra</label>
+                <input 
+                  type="date" 
+                  name="createdAt" 
+                  required
+                  defaultValue={new Date().toISOString().split('T')[0]}
+                  className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors text-sm"
+                />
               </div>
               
               <div>

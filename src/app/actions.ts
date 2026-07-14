@@ -58,7 +58,8 @@ export async function createTransaction(formData: FormData) {
     }
   }
 
-  const txDate = new Date();
+  const createdAtStr = formData.get('createdAt') as string | null;
+  const txDate = createdAtStr ? new Date(createdAtStr + 'T12:00:00') : new Date();
   let txDueDate: Date | null = null;
   const parsedAmount = parseFloat(amount);
 
@@ -221,15 +222,35 @@ export async function updateTransaction(id: string, formData: FormData) {
   const description = formData.get('description') as string;
   const amount = formData.get('amount') as string;
   const category = formData.get('category') as string;
+  const createdAtStr = formData.get('createdAt') as string | null;
 
   if (!description || !amount || !category) {
     return { error: 'Preencha todos os campos.' };
+  }
+
+  const txDate = createdAtStr ? new Date(createdAtStr + 'T12:00:00') : new Date();
+
+  // Buscar a transação existente para saber se é cartão de crédito
+  const existingTx = await db.select().from(transactions).where(eq(transactions.id, id));
+  let txDueDate = txDate;
+
+  if (existingTx.length > 0) {
+    const tx = existingTx[0];
+    if (tx.creditCardId && !tx.accountId) {
+      const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, tx.creditCardId));
+      if (cardRes.length > 0) {
+        const card = cardRes[0];
+        txDueDate = await calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
+      }
+    }
   }
 
   await db.update(transactions).set({
     amount: amount,
     description: description,
     category: category,
+    createdAt: txDate,
+    dueDate: txDueDate,
   }).where(
     and(
       eq(transactions.id, id),
@@ -238,6 +259,7 @@ export async function updateTransaction(id: string, formData: FormData) {
   );
 
   revalidatePath('/');
+  revalidatePath('/transactions');
   return { success: true };
 }
 
@@ -263,6 +285,9 @@ export async function createInstallmentPurchase(formData: FormData) {
 
   const totalAmount = installmentAmount * installmentsCount;
 
+  const createdAtStr = formData.get('createdAt') as string | null;
+  const selectedDate = createdAtStr ? new Date(createdAtStr + 'T12:00:00') : new Date();
+
   // Insert master installment record
   const [installment] = await db.insert(installments).values({
     userId: session.user.id,
@@ -271,6 +296,7 @@ export async function createInstallmentPurchase(formData: FormData) {
     totalAmount: totalAmount.toString(),
     installmentsCount: installmentsCount.toString(),
     creditCardId: creditCardId || null,
+    createdAt: selectedDate,
   }).returning({ id: installments.id });
 
 
@@ -299,7 +325,9 @@ export async function createInstallmentPurchase(formData: FormData) {
 
   // Generate transactions for the remaining installments
   const txValues = [];
-  const now = new Date();
+  const now = new Date(selectedDate);
+  const paidCount = currentInstallment - 1;
+  now.setMonth(now.getMonth() - paidCount);
   
   let firstTxDate = new Date(now);
   if (cardClosingDay > 0 && cardDueDay > 0) {
@@ -308,10 +336,10 @@ export async function createInstallmentPurchase(formData: FormData) {
   
   for (let i = currentInstallment; i <= installmentsCount; i++) {
     const createdAtDate = new Date(now);
-    createdAtDate.setMonth(now.getMonth() + (i - currentInstallment));
+    createdAtDate.setMonth(now.getMonth() + (i - 1));
     
     const dueDateDate = new Date(firstTxDate);
-    dueDateDate.setMonth(firstTxDate.getMonth() + (i - currentInstallment));
+    dueDateDate.setMonth(firstTxDate.getMonth() + (i - 1));
     
     txValues.push({
       userId: session.user.id,

@@ -52,8 +52,8 @@ export default async function Home({
   // Se planned for true, buscamos todas (confirmadas e pendentes). Se for false, apenas confirmadas.
   const conditions = [
     eq(transactions.userId, session.user.id),
-    sql`COALESCE(${transactions.dueDate}, ${transactions.createdAt}) >= ${startOfMonth}`,
-    sql`COALESCE(${transactions.dueDate}, ${transactions.createdAt}) <= ${endOfMonth}`
+    sql`${transactions.createdAt} >= ${startOfMonth}`,
+    sql`${transactions.createdAt} <= ${endOfMonth}`
   ];
 
   if (!planned) {
@@ -465,6 +465,7 @@ export default async function Home({
                           type={tx.type as TransactionType}
                           category={tx.category}
                           date={new Date(tx.createdAt).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}
+                          createdAt={new Date(tx.createdAt).toISOString()}
                           accountId={tx.accountId}
                           creditCardId={tx.creditCardId}
                           accountName={tx.accountId ? (userAccounts.find(a => a.id === tx.accountId)?.name) : null}
