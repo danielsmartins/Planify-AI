@@ -30,7 +30,8 @@ export default async function InstallmentsPage() {
   const installmentsData = userInstallments.map(inst => {
     // Quantas parcelas foram geradas? (Isso pode ser menor que inst.installmentsCount se o usuario já cadastrou a partir da 3ª)
     const generatedTxs = allInstallmentTx.filter(t => t.installmentId === inst.id);
-    const paidTxs = generatedTxs.filter(t => new Date(t.createdAt) <= now);
+    const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const paidTxs = generatedTxs.filter(t => new Date(t.createdAt) < startOfCurrentMonth);
     
     // A parcela atual seria (Total - (Qtd. Geradas)) + Pagas
     // Ex: Comprou em 10x, mas cadastrou na 4ª (Gerou 7). 10 - 7 = 3. Já tinha pago 3 antes do app.
