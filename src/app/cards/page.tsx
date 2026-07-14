@@ -5,19 +5,34 @@ import { redirect } from 'next/navigation';
 import { eq, and, sql } from 'drizzle-orm';
 import { CardClient } from '@/components/cards/CardClient';
 import { processAutoPayments } from '@/lib/auto-pay';
+import { processPendingSubscriptions } from '@/lib/subscriptions-billing';
 
-export default async function CardsPage() {
+function getInvoiceDueDate(baseDate: Date, closingDay: number, dueDay: number): Date {
+  const resultDate = new Date(baseDate);
+  const currentDay = resultDate.getDate();
+  let monthOffset = 0;
+  if (currentDay >= closingDay) {
+    monthOffset = 1;
+  }
+  if (dueDay < closingDay) {
+    monthOffset += 1;
+  }
+  resultDate.setMonth(resultDate.getMonth() + monthOffset);
+  resultDate.setDate(dueDay);
+  return resultDate;
+}
+
+export async function CardsPage() {
   const session = await getSession();
   if (!session) {
     redirect('/login');
   }
 
-  // Processa faturas com pagamento automático vencidas
+  // Processa faturas com pagamento automático vencidas e faturamento de assinaturas
+  await processPendingSubscriptions(session.user.id);
   await processAutoPayments(session.user.id);
 
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
   const userCards = await db.select().from(creditCards).where(eq(creditCards.userId, session.user.id));
   const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, session.user.id));
@@ -32,10 +47,17 @@ export default async function CardsPage() {
   // Calcular valor devedor de cada cartão do mês atual (compras - pagamentos de fatura)
   const cardsWithBalances = userCards.map(card => {
     const cardTxs = cardTransactions.filter(t => t.creditCardId === card.id);
-    const currentMonthTxs = cardTxs.filter(t => t.createdAt >= startOfMonth && t.createdAt <= endOfMonth);
+    const currentInvoiceDueDate = getInvoiceDueDate(now, Number(card.closingDay), Number(card.dueDay));
     
-    const purchases = currentMonthTxs.filter(t => !t.accountId).reduce((sum, t) => sum + parseFloat(t.amount), 0);
-    const payments = currentMonthTxs.filter(t => t.accountId).reduce((sum, t) => sum + parseFloat(t.amount), 0);
+    // Filtra transações que vencem no mês do vencimento atual da fatura
+    const currentInvoiceTxs = cardTxs.filter(t => {
+      const tDate = new Date(t.dueDate || t.createdAt);
+      return tDate.getMonth() === currentInvoiceDueDate.getMonth() && 
+             tDate.getFullYear() === currentInvoiceDueDate.getFullYear();
+    });
+    
+    const purchases = currentInvoiceTxs.filter(t => !t.accountId).reduce((sum, t) => sum + parseFloat(t.amount), 0);
+    const payments = currentInvoiceTxs.filter(t => t.accountId).reduce((sum, t) => sum + parseFloat(t.amount), 0);
     const outstanding = purchases - payments;
     
     return {
@@ -60,7 +82,8 @@ export default async function CardsPage() {
     type: t.type,
     creditCardId: t.creditCardId,
     accountId: t.accountId,
-    createdAt: t.createdAt.toISOString()
+    createdAt: t.createdAt.toISOString(),
+    dueDate: t.dueDate ? t.dueDate.toISOString() : null
   }));
 
   return (
@@ -76,3 +99,5 @@ export default async function CardsPage() {
     </div>
   );
 }
+
+export default CardsPage;
