@@ -7,17 +7,20 @@ import { revalidatePath } from 'next/cache';
 import { eq, and } from 'drizzle-orm';
 import { extractFinancialData } from '@/lib/gemini';
 
-function calculateCreditCardDate(baseDate: Date, closingDay: number, dueDay: number): Date {
+export async function calculateCreditCardDate(baseDate: Date, closingDay: number, dueDay: number): Promise<Date> {
   const resultDate = new Date(baseDate);
   const currentDay = resultDate.getDate();
   
-  // O mês do vencimento será ajustado com base no dia de fechamento
+  let monthOffset = 0;
   if (currentDay >= closingDay) {
-    // Se a data já passou (ou é igual) ao dia de fechamento, a fatura só vem no mês subsequente
-    resultDate.setMonth(resultDate.getMonth() + 1);
+    monthOffset = 1;
   }
   
-  // E o dia exato será o dueDay (se o mes mudar e n tiver esse dia, o JS ajusta)
+  if (dueDay < closingDay) {
+    monthOffset += 1;
+  }
+  
+  resultDate.setMonth(resultDate.getMonth() + monthOffset);
   resultDate.setDate(dueDay);
 
   // Tratando corner cases se dueDay for 31 e o mês cair em Fev, resultDate vai pro mes seguinte
@@ -63,7 +66,7 @@ export async function createTransaction(formData: FormData) {
     const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, creditCardId));
     if (cardRes.length > 0) {
       const card = cardRes[0];
-      txDate = calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
+      txDate = await calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
     }
   }
 
@@ -147,7 +150,7 @@ export async function addTransactionViaAI(text: string) {
     if (creditCardId && !accountId) {
       const card = userCards.find(c => c.id === creditCardId);
       if (card) {
-        txDate = calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
+        txDate = await calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
       }
     }
 
@@ -292,20 +295,14 @@ export async function createInstallmentPurchase(formData: FormData) {
   const txValues = [];
   const now = new Date();
   
+  let firstTxDate = new Date(now);
+  if (cardClosingDay > 0 && cardDueDay > 0) {
+    firstTxDate = await calculateCreditCardDate(now, cardClosingDay, cardDueDay);
+  }
+  
   for (let i = currentInstallment; i <= installmentsCount; i++) {
-    // Calculo basico de meses a frente
-    const baseDate = new Date(now);
-    baseDate.setMonth(now.getMonth() + (i - currentInstallment));
-    
-    let txDate = baseDate;
-    if (cardClosingDay > 0 && cardDueDay > 0) {
-      // Para parcelamentos em andamento, o primeiro item (i = currentInstallment) deve cair no vencimento do mês atual
-      // Os itens subsequentes caem nos meses subsequentes
-      const targetDate = new Date(now);
-      targetDate.setMonth(now.getMonth() + (i - currentInstallment));
-      targetDate.setDate(cardDueDay);
-      txDate = targetDate;
-    }
+    const txDate = new Date(firstTxDate);
+    txDate.setMonth(firstTxDate.getMonth() + (i - currentInstallment));
     
     txValues.push({
       userId: session.user.id,

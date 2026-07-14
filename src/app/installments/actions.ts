@@ -5,6 +5,7 @@ import { installments, transactions, creditCards } from '@/db/schema';
 import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { eq, and } from 'drizzle-orm';
+import { calculateCreditCardDate } from '@/app/actions';
 
 export async function deleteInstallment(id: string) {
   const session = await getSession();
@@ -91,17 +92,14 @@ export async function updateInstallment(id: string, formData: FormData) {
   const now = new Date();
   const currentInstallment = paidCount + 1;
 
+  let firstTxDate = new Date(now);
+  if (cardClosingDay > 0 && cardDueDay > 0) {
+    firstTxDate = await calculateCreditCardDate(now, cardClosingDay, cardDueDay);
+  }
+
   for (let i = currentInstallment; i <= installmentsCount; i++) {
-    const baseDate = new Date(now);
-    baseDate.setMonth(now.getMonth() + (i - currentInstallment));
-    
-    let txDate = baseDate;
-    if (cardClosingDay > 0 && cardDueDay > 0) {
-      const targetDate = new Date(now);
-      targetDate.setMonth(now.getMonth() + (i - currentInstallment));
-      targetDate.setDate(cardDueDay);
-      txDate = targetDate;
-    }
+    const txDate = new Date(firstTxDate);
+    txDate.setMonth(firstTxDate.getMonth() + (i - currentInstallment));
 
     txValues.push({
       userId: session.user.id,
