@@ -154,7 +154,7 @@ export function LandingPage() {
         >
           <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent z-10 pointer-events-none" />
           <Image 
-            src="/images/dashboard_mockup_pt.png" 
+            src="/images/dashboard_mockup_pt_v2.png" 
             alt="Planify AI Dashboard Mockup" 
             width={1200}
             height={675}
