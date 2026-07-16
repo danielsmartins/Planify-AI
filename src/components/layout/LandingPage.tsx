@@ -8,7 +8,6 @@ import {
   CreditCard, 
   MessageSquare, 
   ShieldCheck, 
-  Sparkles, 
   Wallet, 
   Zap 
 } from 'lucide-react';
@@ -88,9 +87,13 @@ export function LandingPage() {
       <header className="relative z-10 border-b border-neutral-900 bg-[#000000]/80 backdrop-blur-md px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="bg-neutral-900 p-2 rounded-xl border border-neutral-800 text-white">
-              <Sparkles size={18} />
-            </div>
+            <Image 
+              src="/images/logo_icon.png" 
+              alt="Planify AI" 
+              width={34} 
+              height={34} 
+              className="rounded-xl border border-neutral-800"
+            />
             <span className="font-semibold text-lg tracking-tight text-white">Planify AI</span>
           </div>
 

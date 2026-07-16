@@ -1,6 +1,7 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { getSession, logout } from '@/lib/auth';
-import { LayoutDashboard, Tags, Sparkles, CreditCard, Wallet, BarChart2, Landmark, RotateCcw, LogOut, Settings } from 'lucide-react';
+import { LayoutDashboard, Tags, CreditCard, Wallet, BarChart2, Landmark, RotateCcw, LogOut, Settings } from 'lucide-react';
 import { MobileMenu } from './MobileMenu';
 
 export async function TopNav() {
@@ -15,9 +16,13 @@ export async function TopNav() {
         <div className="flex flex-col gap-8">
           {/* Logo */}
           <div className="flex items-center gap-2.5 px-2">
-            <div className="bg-white p-2 rounded-xl text-black">
-              <Sparkles size={18} />
-            </div>
+            <Image 
+              src="/images/logo_icon.png" 
+              alt="Planify AI" 
+              width={34} 
+              height={34} 
+              className="rounded-xl border border-neutral-800"
+            />
             <span className="font-bold text-xl tracking-tight text-white">Planify AI</span>
           </div>
 
@@ -92,9 +97,13 @@ export async function TopNav() {
       {/* Header para Mobile */}
       <nav className="lg:hidden flex items-center justify-between p-4 bg-[#000000] border-b border-neutral-900 w-full z-30">
         <div className="flex items-center gap-2">
-          <div className="bg-neutral-900 p-1.5 rounded-lg border border-neutral-800 text-white">
-            <Sparkles size={16} />
-          </div>
+          <Image 
+            src="/images/logo_icon.png" 
+            alt="Planify AI" 
+            width={28} 
+            height={28} 
+            className="rounded-lg border border-neutral-800"
+          />
           <span className="font-bold text-base tracking-tight text-white">Planify AI</span>
         </div>
         

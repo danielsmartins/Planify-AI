@@ -59,6 +59,7 @@ async function extractTextFromPdf(buffer: Buffer): Promise<string> {
 
 export async function POST(req: NextRequest) {
   let chatId: string | undefined = undefined;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || req.nextUrl.origin || 'http://localhost:3000';
 
   try {
     const body = await req.json();
@@ -99,7 +100,7 @@ export async function POST(req: NextRequest) {
               if (card) {
                 await db.update(installments).set({ creditCardId: card.id }).where(eq(installments.id, instId));
                 await db.update(transactions).set({ status: 'confirmed', creditCardId: card.id, accountId: null }).where(eq(transactions.installmentId, instId));
-                await sendTelegramMessage(chatId, `✅ Compra parcelada no cartão *${card.name}* confirmada com sucesso!`);
+                await sendTelegramMessage(chatId, `✅ Compra parcelada no cartão *${card.name}* confirmada com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`);
               } else {
                 await sendTelegramMessage(chatId, "⚠️ Cartão selecionado não encontrado.");
               }
@@ -121,14 +122,14 @@ export async function POST(req: NextRequest) {
                   const newBalance = currentBalance - val;
                   await db.update(accounts).set({ balance: newBalance.toString() }).where(eq(accounts.id, acc.id));
                 }
-                await sendTelegramMessage(chatId, `✅ Compra parcelada na conta *${acc.name}* confirmada com sucesso!`);
+                await sendTelegramMessage(chatId, `✅ Compra parcelada na conta *${acc.name}* confirmada com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`);
               } else {
                 await sendTelegramMessage(chatId, "⚠️ Conta selecionada não encontrada.");
               }
             } else {
               // Fallback antigo
               await db.update(transactions).set({ status: 'confirmed' }).where(eq(transactions.installmentId, instId));
-              await sendTelegramMessage(chatId, "✅ Compra parcelada confirmada com sucesso!");
+              await sendTelegramMessage(chatId, `✅ Compra parcelada confirmada com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`);
             }
           } else {
             await sendTelegramMessage(chatId, "⚠️ Compra parcelada não encontrada.");
@@ -162,7 +163,7 @@ export async function POST(req: NextRequest) {
                   creditCardId: card.id, 
                   accountId: null 
                 }).where(eq(transactions.id, txId));
-                await sendTelegramMessage(chatId, `✅ Transação confirmada no cartão *${card.name}* com sucesso!`);
+                await sendTelegramMessage(chatId, `✅ Transação confirmada no cartão *${card.name}* com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`);
               } else {
                 await sendTelegramMessage(chatId, "⚠️ Cartão selecionado não encontrado.");
               }
@@ -180,7 +181,7 @@ export async function POST(req: NextRequest) {
                   accountId: acc.id, 
                   creditCardId: null 
                 }).where(eq(transactions.id, txId));
-                await sendTelegramMessage(chatId, `✅ Transação confirmada na conta *${acc.name}* com sucesso!`);
+                await sendTelegramMessage(chatId, `✅ Transação confirmada na conta *${acc.name}* com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`);
               } else {
                 await sendTelegramMessage(chatId, "⚠️ Conta selecionada não encontrada.");
               }
@@ -197,7 +198,7 @@ export async function POST(req: NextRequest) {
                 }
               }
               await db.update(transactions).set({ status: 'confirmed' }).where(eq(transactions.id, txId));
-              await sendTelegramMessage(chatId, "✅ Transação confirmada e salva com sucesso!");
+              await sendTelegramMessage(chatId, `✅ Transação confirmada e salva com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`);
             }
           } else {
             await sendTelegramMessage(chatId, "⚠️ Transação já processada ou não encontrada.");
@@ -259,7 +260,7 @@ export async function POST(req: NextRequest) {
 
           await sendTelegramMessage(
             chatId, 
-            `✅ *Importação concluída!*\n\nImportadas *${txs.length} compras* para o cartão *${card.name}*:\n\n${summary}${extraText}`
+            `✅ *Importação concluída!*\n\nImportadas *${txs.length} compras* para o cartão *${card.name}*:\n\n${summary}${extraText}\n\n📊 [Ver no Dashboard](${appUrl})`
           );
 
         } else if (callbackData.startsWith('cancel_pdf_')) {
@@ -454,9 +455,23 @@ Você pode registrar despesas, ganhos e até compras parceladas apenas me mandan
 - Envie a fatura do seu cartão em PDF diretamente pelo chat e eu farei a importação automática das transações para você!
 
 O bot irá entender, categorizar automaticamente e pedir para você confirmar antes de salvar!
+
+🔗 *Acesse o Dashboard:*
+📊 [Acessar Planify AI](${appUrl})
       `;
       await sendTelegramMessage(chatId, helpMsg);
       return NextResponse.json({ status: "Help" });
+    }
+
+    // Comando /link, !link ou /dashboard
+    if (textMessage && (
+      textMessage.toLowerCase().startsWith("/link") || 
+      textMessage.toLowerCase().startsWith("!link") || 
+      textMessage.toLowerCase().startsWith("/dashboard")
+    )) {
+      const linkMsg = `🔗 *Planify AI - Link de Acesso*\n\nAqui está o link para acessar o seu painel financeiro:\n\n📊 [Ver no Dashboard](${appUrl})`;
+      await sendTelegramMessage(chatId, linkMsg);
+      return NextResponse.json({ status: "Link sent" });
     }
 
     // Comando de /start para vincular a conta
@@ -466,14 +481,14 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
         const userId = parts[1];
         try {
           await db.update(users).set({ telegramChatId: chatId }).where(eq(users.id, userId));
-          await sendTelegramMessage(chatId, "🎉 *Conta vinculada com sucesso!*\n\nAgora você pode me enviar seus gastos ou ganhos diretamente por aqui, digitando ou por áudio.\n\nExemplo: `Comprei pão por 15 reais no débito`\n\nDigite /help para ver mais exemplos.");
+          await sendTelegramMessage(chatId, `🎉 *Conta vinculada com sucesso!*\n\nAgora você pode me enviar seus gastos ou ganhos diretamente por aqui, digitando ou por áudio.\n\nExemplo: \`Comprei pão por 15 reais no débito\`\n\nDigite /help para ver mais exemplos.\n\n📊 [Acessar o Dashboard](${appUrl})`);
           return NextResponse.json({ status: "Linked" });
         } catch {
           await sendTelegramMessage(chatId, "❌ Erro ao vincular sua conta. Tente novamente pelo site.");
           return NextResponse.json({ status: "Error linking" });
         }
       } else {
-        await sendTelegramMessage(chatId, "👋 Olá! Para começar, acesse o painel web do Planify AI e clique em *Conectar Telegram*.");
+        await sendTelegramMessage(chatId, `👋 Olá! Para começar, acesse o painel web do Planify AI e clique em *Conectar Telegram*.\n\n📊 [Acessar o Dashboard](${appUrl})`);
         return NextResponse.json({ status: "Welcome" });
       }
     }
