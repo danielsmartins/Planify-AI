@@ -17,7 +17,7 @@ export async function TopNav() {
           {/* Logo */}
           <div className="flex items-center gap-2.5 px-2">
             <Image 
-              src="/images/logo_icon.png" 
+              src="/images/logo_icon_v2.png" 
               alt="Planify AI" 
               width={34} 
               height={34} 
@@ -98,7 +98,7 @@ export async function TopNav() {
       <nav className="lg:hidden flex items-center justify-between p-4 bg-[#000000] border-b border-neutral-900 w-full z-30">
         <div className="flex items-center gap-2">
           <Image 
-            src="/images/logo_icon.png" 
+            src="/images/logo_icon_v2.png" 
             alt="Planify AI" 
             width={28} 
             height={28} 

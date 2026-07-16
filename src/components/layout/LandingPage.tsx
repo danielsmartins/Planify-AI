@@ -88,7 +88,7 @@ export function LandingPage() {
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Image 
-              src="/images/logo_icon.png" 
+              src="/images/logo_icon_v2.png" 
               alt="Planify AI" 
               width={34} 
               height={34} 
