@@ -145,10 +145,12 @@ export function LandingPage() {
             Acessar Plataforma
           </Link>
         </div>
+      </section>
 
-        {/* Real App Screenshot Mockup */}
+      {/* Real App Screenshot Mockup - outside hero section for wider display */}
+      <div className="relative z-10 max-w-6xl mx-auto px-6 -mt-2 mb-16">
         <div 
-          className={`relative rounded-2xl border border-neutral-800 bg-[#09090b]/50 p-2 overflow-hidden shadow-[0_0_50px_rgba(255,255,255,0.03)] max-w-4xl mx-auto transition-all duration-[1200ms] ease-out transform hover:scale-[1.015] hover:shadow-[0_0_80px_rgba(255,255,255,0.06)] hover:border-neutral-700/80 cursor-pointer ${
+          className={`relative rounded-2xl border border-neutral-800 bg-[#09090b]/50 p-2 overflow-hidden shadow-[0_0_50px_rgba(255,255,255,0.03)] mx-auto transition-all duration-[1200ms] ease-out transform hover:scale-[1.015] hover:shadow-[0_0_80px_rgba(255,255,255,0.06)] hover:border-neutral-700/80 cursor-pointer ${
             loaded ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-16 scale-95'
           }`}
         >
@@ -162,7 +164,7 @@ export function LandingPage() {
             className="w-full h-auto rounded-xl border border-neutral-900"
           />
         </div>
-      </section>
+      </div>
 
       {/* Bento Grid Features */}
       <section className="relative z-10 max-w-6xl mx-auto px-6 py-16">
