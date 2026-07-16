@@ -153,12 +153,12 @@ export function LandingPage() {
           }`}
         >
           <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent z-10 pointer-events-none" />
-          <Image 
-            src="/images/dashboard_mockup_pt_v2.png" 
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img 
+            src="/images/dashboard_mockup_pt.png" 
             alt="Planify AI Dashboard Mockup" 
             width={1200}
             height={675}
-            priority
             className="w-full h-auto rounded-xl border border-neutral-900"
           />
         </div>
