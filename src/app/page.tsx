@@ -12,6 +12,9 @@ import { NetWorthChart } from '@/components/dashboard/NetWorthChart';
 import { processAutoPayments } from '@/lib/auto-pay';
 import { processPendingSubscriptions } from '@/lib/subscriptions-billing';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function Home({
   searchParams,
 }: {
