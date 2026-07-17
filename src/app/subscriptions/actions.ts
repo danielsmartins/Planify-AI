@@ -6,26 +6,19 @@ import { getSession } from '@/lib/auth';
 import { eq, and } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
+import { subscriptionSchema } from '@/lib/validations';
+
 export async function addSubscription(formData: FormData) {
   const session = await getSession();
   if (!session) return { error: 'Não autorizado' };
 
-  const name = formData.get('name') as string;
-  const amount = parseFloat(formData.get('amount') as string);
-  const category = formData.get('category') as string;
-  const billingCycle = formData.get('billingCycle') as 'monthly' | 'yearly';
-  const nextBillingDateStr = formData.get('nextBillingDate') as string;
-  const accountId = formData.get('accountId') as string | null;
-  const creditCardId = formData.get('creditCardId') as string | null;
-  const color = formData.get('color') as string || '#10b981';
-
-  if (!name || isNaN(amount) || !category || !nextBillingDateStr) {
-    return { error: 'Preencha todos os campos obrigatórios corretamente' };
+  // Parse and validate with Zod
+  const rawData = Object.fromEntries(formData);
+  const validation = subscriptionSchema.safeParse(rawData);
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message };
   }
-
-  // Se a data for inserida no fuso local do usuário, no servidor pode ter offset
-  // Como é apenas uma data YYYY-MM-DD, vamos forçar T00:00:00 para evitar que vire o dia anterior no banco.
-  const nextBillingDate = new Date(`${nextBillingDateStr}T12:00:00Z`);
+  const { name, amount, category, billingCycle, nextBillingDate, accountId, creditCardId, color } = validation.data;
 
   await db.insert(subscriptions).values({
     userId: session.user.id,

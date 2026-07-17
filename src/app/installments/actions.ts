@@ -6,10 +6,11 @@ import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { eq, and } from 'drizzle-orm';
 import { calculateCreditCardDate } from '@/app/actions';
+import { updateInstallmentSchema } from '@/lib/validations';
 
 export async function deleteInstallment(id: string) {
   const session = await getSession();
-  if (!session) throw new Error('Unauthorized');
+  if (!session) return { error: 'Não autorizado' };
 
   // Primeiro deleta todas as transações vinculadas a este installment que ainda estao pendentes/confirmadas
   await db.delete(transactions).where(
@@ -34,28 +35,23 @@ export async function deleteInstallment(id: string) {
 
 export async function updateInstallment(id: string, formData: FormData) {
   const session = await getSession();
-  if (!session) throw new Error('Unauthorized');
+  if (!session) return { error: 'Não autorizado' };
 
-  const description = formData.get('description') as string;
-  const category = formData.get('category') as string;
-  const installmentAmount = parseFloat(formData.get('amount') as string);
-  const installmentsCount = parseInt(formData.get('installmentsCount') as string);
-  const paidCount = parseInt(formData.get('paidCount') as string);
-  const creditCardId = formData.get('creditCardId') as string | null;
+  // Parse and validate with Zod
+  const rawData = Object.fromEntries(formData);
+  const validation = updateInstallmentSchema.safeParse(rawData);
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message };
+  }
+  const { description, category, amount, installmentsCount, paidCount, creditCardId, createdAt } = validation.data;
+
   const accountId = formData.get('accountId') as string | null;
 
-  if (!description || !category || isNaN(installmentAmount) || isNaN(installmentsCount) || isNaN(paidCount)) {
-    throw new Error('Preencha todos os campos corretamente.');
-  }
-
   if (paidCount > installmentsCount) {
-    throw new Error('A quantidade de parcelas pagas não pode ser maior que o total de parcelas.');
+    return { error: 'A quantidade de parcelas pagas não pode ser maior que o total de parcelas.' };
   }
 
-  const totalAmount = installmentAmount * installmentsCount;
-
-  const createdAtStr = formData.get('createdAt') as string | null;
-  const selectedDate = createdAtStr ? new Date(createdAtStr + 'T12:00:00') : new Date();
+  const totalAmount = amount * installmentsCount;
 
   // Atualizar o registro mestre de installments
   await db.update(installments).set({
@@ -64,7 +60,7 @@ export async function updateInstallment(id: string, formData: FormData) {
     totalAmount: totalAmount.toString(),
     installmentsCount: installmentsCount.toString(),
     creditCardId: creditCardId || null,
-    createdAt: selectedDate,
+    createdAt: createdAt,
   }).where(
     and(
       eq(installments.id, id),
@@ -93,7 +89,7 @@ export async function updateInstallment(id: string, formData: FormData) {
 
   // Recriar as transações futuras baseadas na parcela atual
   const txValues = [];
-  const now = new Date(selectedDate);
+  const now = new Date(createdAt);
   now.setMonth(now.getMonth() - paidCount);
   const currentInstallment = paidCount + 1;
 
@@ -111,7 +107,7 @@ export async function updateInstallment(id: string, formData: FormData) {
 
     txValues.push({
       userId: session.user.id,
-      amount: installmentAmount.toString(),
+      amount: amount.toString(),
       description: `${description} (${i}/${installmentsCount})`,
       category: category,
       type: 'expense' as const,

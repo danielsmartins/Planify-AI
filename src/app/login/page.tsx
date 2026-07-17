@@ -1,9 +1,12 @@
 'use client';
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { login } from '@/lib/auth';
 import Link from 'next/link';
 
 export default function LoginPage() {
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+
   const [state, formAction, pending] = useActionState(async (prevState: { error: string }, formData: FormData) => {
     const res = await login(formData);
     if (res?.error) return { error: res.error };
@@ -29,6 +32,8 @@ export default function LoginPage() {
             <input 
               type="text" 
               name="identifier" 
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               placeholder="ex: seu@email.com ou 11999999999"
               className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-brand transition-colors"
               required 
@@ -40,6 +45,8 @@ export default function LoginPage() {
             <input 
               type="password" 
               name="password" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               placeholder="Sua senha secreta"
               className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-brand transition-colors"
               required 

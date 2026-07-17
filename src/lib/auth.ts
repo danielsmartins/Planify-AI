@@ -5,6 +5,8 @@ import { db } from '@/db';
 import { users, categories } from '@/db/schema';
 import { eq, or } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
+import { loginSchema, registerSchema } from './validations';
+import { rateLimit } from './rate-limit';
 
 export interface SessionPayload {
   user: {
@@ -32,10 +34,19 @@ export async function decrypt(input: string): Promise<SessionPayload | null> {
 }
 
 export async function login(formData: FormData) {
-  const identifier = formData.get('identifier') as string;
-  const password = formData.get('password') as string;
+  // Apply Rate Limiting (max 5 login attempts per minute)
+  const limiter = await rateLimit(5, 60000);
+  if (!limiter.success) {
+    return { error: `Muitas tentativas de login. Tente novamente em ${limiter.retryAfter} segundos.` };
+  }
 
-  if (!identifier || !password) return { error: 'Preencha todos os campos.' };
+  // Parse and validate form data with Zod
+  const rawData = Object.fromEntries(formData);
+  const validation = loginSchema.safeParse(rawData);
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message };
+  }
+  const { identifier, password } = validation.data;
 
   const userRes = await db.select().from(users).where(
     or(eq(users.email, identifier), eq(users.phone, identifier))
@@ -51,21 +62,31 @@ export async function login(formData: FormData) {
   const session = await encrypt({ user: { id: user.id, name: user.name }, expires });
 
   const cookieStore = await cookies();
-  cookieStore.set('session', session, { expires, httpOnly: true, path: '/' });
+  cookieStore.set('session', session, { 
+    expires, 
+    httpOnly: true, 
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/' 
+  });
 
   return { success: true };
 }
 
 export async function register(formData: FormData) {
-  const name = formData.get('name') as string;
-  const email = formData.get('email') as string;
-  const phone = formData.get('phone') as string;
-  const password = formData.get('password') as string;
-  const age = formData.get('age') as string;
-  const incomeRange = formData.get('incomeRange') as string;
-  const financialGoal = formData.get('financialGoal') as string;
+  // Apply Rate Limiting (max 3 registrations per minute)
+  const limiter = await rateLimit(3, 60000);
+  if (!limiter.success) {
+    return { error: `Muitas tentativas de cadastro. Tente novamente em ${limiter.retryAfter} segundos.` };
+  }
 
-  if (!name || !email || !password) return { error: 'Preencha todos os campos obrigatórios.' };
+  // Parse and validate form data with Zod
+  const rawData = Object.fromEntries(formData);
+  const validation = registerSchema.safeParse(rawData);
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message };
+  }
+  const { name, email, phone, password, age, incomeRange, financialGoal } = validation.data;
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -73,11 +94,11 @@ export async function register(formData: FormData) {
     const [newUser] = await db.insert(users).values({
       name,
       email,
-      phone: phone || null,
+      phone,
       password: hashedPassword,
-      age: age ? parseInt(age, 10) : null,
-      incomeRange: incomeRange || null,
-      financialGoal: financialGoal || null,
+      age,
+      incomeRange,
+      financialGoal,
     }).returning();
     
     await db.insert(categories).values([

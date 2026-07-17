@@ -6,25 +6,26 @@ import { getSession } from '@/lib/auth';
 import { eq, and } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
+import { accountSchema } from '@/lib/validations';
+
 export async function addAccount(formData: FormData) {
   const session = await getSession();
   if (!session) return { error: 'Não autorizado' };
 
-  const name = formData.get('name') as string;
-  const color = formData.get('color') as string;
-  const type = formData.get('type') as 'checking' | 'savings' | 'investment' | 'cash';
-  const balance = formData.get('balance') as string || '0';
-
-  if (!name || !color || !type) {
-    return { error: 'Preencha os campos obrigatórios' };
+  // Parse and validate with Zod
+  const rawData = Object.fromEntries(formData);
+  const validation = accountSchema.safeParse(rawData);
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message };
   }
+  const { name, color, type, balance } = validation.data;
 
   await db.insert(accounts).values({
     userId: session.user.id,
     name,
     color,
     type,
-    balance: parseFloat(balance).toString(),
+    balance: balance.toString(),
   });
 
   revalidatePath('/accounts');
@@ -35,16 +36,19 @@ export async function updateAccount(id: string, formData: FormData) {
   const session = await getSession();
   if (!session) return { error: 'Não autorizado' };
 
-  const name = formData.get('name') as string;
-  const color = formData.get('color') as string;
-  const type = formData.get('type') as 'checking' | 'savings' | 'investment' | 'cash';
-  const balance = formData.get('balance') as string;
+  // Parse and validate with Zod
+  const rawData = Object.fromEntries(formData);
+  const validation = accountSchema.partial().safeParse(rawData);
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message };
+  }
+  const validatedData = validation.data;
 
   const dataToUpdate: Record<string, string> = {};
-  if (name) dataToUpdate.name = name;
-  if (color) dataToUpdate.color = color;
-  if (type) dataToUpdate.type = type;
-  if (balance) dataToUpdate.balance = parseFloat(balance).toString();
+  if (validatedData.name) dataToUpdate.name = validatedData.name;
+  if (validatedData.color) dataToUpdate.color = validatedData.color;
+  if (validatedData.type) dataToUpdate.type = validatedData.type;
+  if (validatedData.balance !== undefined) dataToUpdate.balance = validatedData.balance.toString();
 
   await db.update(accounts)
     .set(dataToUpdate)

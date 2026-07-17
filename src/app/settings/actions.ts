@@ -6,39 +6,31 @@ import { getSession } from '@/lib/auth';
 import { eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
+import { profileSchema } from '@/lib/validations';
+
 export async function updateProfile(formData: FormData) {
   const session = await getSession();
   if (!session) {
     return { error: 'Não autorizado' };
   }
 
-  const name = formData.get('name') as string;
-  const phone = formData.get('phone') as string;
-  const ageStr = formData.get('age') as string;
-  const incomeRange = formData.get('incomeRange') as string;
-  const financialGoal = formData.get('financialGoal') as string;
-
-  if (!name || name.trim() === '') {
-    return { error: 'O nome não pode ser vazio' };
+  // Parse and validate with Zod
+  const rawData = Object.fromEntries(formData);
+  const validation = profileSchema.omit({ email: true }).safeParse(rawData);
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message };
   }
-
-  let age: number | null = null;
-  if (ageStr) {
-    age = parseInt(ageStr, 10);
-    if (isNaN(age) || age <= 0) {
-      return { error: 'A idade deve ser um número inteiro válido' };
-    }
-  }
+  const { name, phone, age, incomeRange, financialGoal } = validation.data;
 
   try {
     await db
       .update(users)
       .set({
         name,
-        phone: phone ? phone.trim() : null,
+        phone,
         age,
-        incomeRange: incomeRange || null,
-        financialGoal: financialGoal || null,
+        incomeRange,
+        financialGoal,
       })
       .where(eq(users.id, session.user.id));
 

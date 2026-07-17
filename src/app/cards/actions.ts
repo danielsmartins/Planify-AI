@@ -5,32 +5,30 @@ import { creditCards, transactions, installments, accounts } from '@/db/schema';
 import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { eq, and } from 'drizzle-orm';
+import { creditCardSchema } from '@/lib/validations';
 
 export async function addCreditCard(formData: FormData) {
   const session = await getSession();
-  if (!session) throw new Error('Unauthorized');
+  if (!session) return { error: 'Não autorizado' };
 
-  const name = formData.get('name') as string;
-  const color = formData.get('color') as string;
-  const closingDay = formData.get('closingDay') as string;
-  const dueDay = formData.get('dueDay') as string;
-  const limitAmount = formData.get('limitAmount') as string;
-  const brand = formData.get('brand') as string;
-  const autoPay = formData.get('autoPay') === 'on';
-  const autoPayAccountId = formData.get('autoPayAccountId') as string || null;
-
-  if (!name || !color || !closingDay || !dueDay || !brand) throw new Error('Invalid data');
+  // Parse and validate with Zod
+  const rawData = Object.fromEntries(formData);
+  const validation = creditCardSchema.safeParse(rawData);
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message };
+  }
+  const { name, color, closingDay, dueDay, limitAmount, brand, autoPay, autoPayAccountId } = validation.data;
 
   await db.insert(creditCards).values({
     userId: session.user.id,
     name,
     color,
-    closingDay,
-    dueDay,
-    limitAmount: limitAmount ? parseFloat(limitAmount).toString() : '0',
+    closingDay: closingDay.toString(),
+    dueDay: dueDay.toString(),
+    limitAmount: limitAmount.toString(),
     brand,
     autoPay,
-    autoPayAccountId: autoPayAccountId || null,
+    autoPayAccountId,
   });
 
   revalidatePath('/cards');
@@ -69,28 +67,25 @@ export async function deleteCreditCard(id: string) {
 
 export async function updateCreditCard(id: string, formData: FormData) {
   const session = await getSession();
-  if (!session) throw new Error('Unauthorized');
+  if (!session) return { error: 'Não autorizado' };
 
-  const name = formData.get('name') as string;
-  const color = formData.get('color') as string;
-  const closingDay = formData.get('closingDay') as string;
-  const dueDay = formData.get('dueDay') as string;
-  const limitAmount = formData.get('limitAmount') as string;
-  const brand = formData.get('brand') as string;
-  const autoPay = formData.get('autoPay') === 'on';
-  const autoPayAccountId = formData.get('autoPayAccountId') as string || null;
-
-  if (!name || !color || !closingDay || !dueDay || !brand) throw new Error('Invalid data');
+  // Parse and validate with Zod
+  const rawData = Object.fromEntries(formData);
+  const validation = creditCardSchema.safeParse(rawData);
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message };
+  }
+  const { name, color, closingDay, dueDay, limitAmount, brand, autoPay, autoPayAccountId } = validation.data;
 
   await db.update(creditCards).set({
     name,
     color,
-    closingDay,
-    dueDay,
-    limitAmount: limitAmount ? parseFloat(limitAmount).toString() : '0',
+    closingDay: closingDay.toString(),
+    dueDay: dueDay.toString(),
+    limitAmount: limitAmount.toString(),
     brand,
     autoPay,
-    autoPayAccountId: autoPayAccountId || null,
+    autoPayAccountId,
   }).where(
     and(
       eq(creditCards.id, id),

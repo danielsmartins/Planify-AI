@@ -6,6 +6,7 @@ import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { eq, and } from 'drizzle-orm';
 import { extractFinancialData } from '@/lib/gemini';
+import { transactionSchema, installmentPurchaseSchema } from '@/lib/validations';
 
 export async function calculateCreditCardDate(baseDate: Date, closingDay: number, dueDay: number): Promise<Date> {
   const resultDate = new Date(baseDate);
@@ -33,16 +34,13 @@ export async function createTransaction(formData: FormData) {
   const session = await getSession();
   if (!session) return { error: 'Not authenticated' };
 
-  const description = formData.get('description') as string;
-  const amount = formData.get('amount') as string;
-  const category = formData.get('category') as string;
-  const type = formData.get('type') as 'income' | 'expense';
-  const creditCardId = formData.get('creditCardId') as string | null;
-  const accountId = formData.get('accountId') as string | null;
-
-  if (!description || !amount || !category) {
-    return { error: 'Preencha todos os campos.' };
+  // Parse and validate with Zod
+  const rawData = Object.fromEntries(formData);
+  const validation = transactionSchema.safeParse(rawData);
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message };
   }
+  const { description, amount, category, type, creditCardId, accountId, createdAt } = validation.data;
 
   // Validações obrigatórias impostas a partir de contas e carteiras
   if (type === 'income') {
@@ -58,17 +56,15 @@ export async function createTransaction(formData: FormData) {
     }
   }
 
-  const createdAtStr = formData.get('createdAt') as string | null;
-  const txDate = createdAtStr ? new Date(createdAtStr + 'T12:00:00') : new Date();
   let txDueDate: Date | null = null;
-  const parsedAmount = parseFloat(amount);
+  const parsedAmount = amount;
 
   // Se for despesa no cartão de crédito E não tiver conta vinculada (gasto normal no crédito)
   if (creditCardId && !accountId) {
     const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, creditCardId));
     if (cardRes.length > 0) {
       const card = cardRes[0];
-      txDueDate = await calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
+      txDueDate = await calculateCreditCardDate(createdAt, Number(card.closingDay), Number(card.dueDay));
     }
   }
 
@@ -88,13 +84,13 @@ export async function createTransaction(formData: FormData) {
 
   await db.insert(transactions).values({
     userId: session.user.id,
-    amount: amount,
+    amount: amount.toString(),
     description: description,
     category: category,
     type: type,
     creditCardId: creditCardId || null,
     accountId: accountId || null,
-    createdAt: txDate,
+    createdAt: createdAt,
     dueDate: txDueDate
   });
 
@@ -219,20 +215,22 @@ export async function updateTransaction(id: string, formData: FormData) {
   const session = await getSession();
   if (!session) return { error: 'Not authenticated' };
 
-  const description = formData.get('description') as string;
-  const amount = formData.get('amount') as string;
-  const category = formData.get('category') as string;
-  const createdAtStr = formData.get('createdAt') as string | null;
-
-  if (!description || !amount || !category) {
-    return { error: 'Preencha todos os campos.' };
+  // Parse and validate with Zod
+  const rawData = Object.fromEntries(formData);
+  const validation = transactionSchema.pick({
+    amount: true,
+    description: true,
+    category: true,
+    createdAt: true,
+  }).safeParse(rawData);
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message };
   }
-
-  const txDate = createdAtStr ? new Date(createdAtStr + 'T12:00:00') : new Date();
+  const { description, amount, category, createdAt } = validation.data;
 
   // Buscar a transação existente para saber se é cartão de crédito
   const existingTx = await db.select().from(transactions).where(eq(transactions.id, id));
-  let txDueDate = txDate;
+  let txDueDate = createdAt;
 
   if (existingTx.length > 0) {
     const tx = existingTx[0];
@@ -240,16 +238,16 @@ export async function updateTransaction(id: string, formData: FormData) {
       const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, tx.creditCardId));
       if (cardRes.length > 0) {
         const card = cardRes[0];
-        txDueDate = await calculateCreditCardDate(txDate, Number(card.closingDay), Number(card.dueDay));
+        txDueDate = await calculateCreditCardDate(createdAt, Number(card.closingDay), Number(card.dueDay));
       }
     }
   }
 
   await db.update(transactions).set({
-    amount: amount,
+    amount: amount.toString(),
     description: description,
     category: category,
-    createdAt: txDate,
+    createdAt: createdAt,
     dueDate: txDueDate,
   }).where(
     and(
@@ -267,26 +265,21 @@ export async function createInstallmentPurchase(formData: FormData) {
   const session = await getSession();
   if (!session) return { error: 'Not authenticated' };
 
-  const description = formData.get('description') as string;
-  const installmentAmount = parseFloat(formData.get('amount') as string);
-  const category = formData.get('category') as string;
-  const installmentsCount = parseInt(formData.get('installmentsCount') as string);
-  const currentInstallment = parseInt(formData.get('currentInstallment') as string);
-  const creditCardId = formData.get('creditCardId') as string | null;
-  const accountId = formData.get('accountId') as string | null;
-
-  if (!description || isNaN(installmentAmount) || !category || isNaN(installmentsCount) || isNaN(currentInstallment)) {
-    return { error: 'Preencha todos os campos corretamente.' };
+  // Parse and validate with Zod
+  const rawData = Object.fromEntries(formData);
+  const validation = installmentPurchaseSchema.safeParse(rawData);
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message };
   }
+  const { description, amount, category, installmentsCount, currentInstallment, creditCardId, createdAt } = validation.data;
+
+  const accountId = formData.get('accountId') as string | null;
 
   if (currentInstallment > installmentsCount) {
     return { error: 'A parcela atual não pode ser maior que o total de parcelas.' };
   }
 
-  const totalAmount = installmentAmount * installmentsCount;
-
-  const createdAtStr = formData.get('createdAt') as string | null;
-  const selectedDate = createdAtStr ? new Date(createdAtStr + 'T12:00:00') : new Date();
+  const totalAmount = amount * installmentsCount;
 
   // Insert master installment record
   const [installment] = await db.insert(installments).values({
@@ -296,10 +289,8 @@ export async function createInstallmentPurchase(formData: FormData) {
     totalAmount: totalAmount.toString(),
     installmentsCount: installmentsCount.toString(),
     creditCardId: creditCardId || null,
-    createdAt: selectedDate,
+    createdAt: createdAt,
   }).returning({ id: installments.id });
-
-
 
   // Se houver conta associada, desconta o valor da parcela atual do saldo da conta
   if (accountId) {
@@ -307,7 +298,7 @@ export async function createInstallmentPurchase(formData: FormData) {
     if (accRes.length > 0) {
       const acc = accRes[0];
       const currentBalance = parseFloat(acc.balance);
-      const newBalance = currentBalance - installmentAmount;
+      const newBalance = currentBalance - amount;
       await db.update(accounts).set({ balance: newBalance.toString() }).where(eq(accounts.id, acc.id));
     }
   }
@@ -325,7 +316,7 @@ export async function createInstallmentPurchase(formData: FormData) {
 
   // Generate transactions for the remaining installments
   const txValues = [];
-  const now = new Date(selectedDate);
+  const now = new Date(createdAt);
   const paidCount = currentInstallment - 1;
   now.setMonth(now.getMonth() - paidCount);
   
@@ -343,7 +334,7 @@ export async function createInstallmentPurchase(formData: FormData) {
     
     txValues.push({
       userId: session.user.id,
-      amount: installmentAmount.toString(),
+      amount: amount.toString(),
       description: `${description} (${i}/${installmentsCount})`,
       category: category,
       type: 'expense' as const,

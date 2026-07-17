@@ -6,21 +6,25 @@ import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { eq, and } from 'drizzle-orm';
 
+import { categorySchema } from '@/lib/validations';
+
 export async function addCategory(formData: FormData) {
   const session = await getSession();
-  if (!session) throw new Error('Unauthorized');
+  if (!session) return { error: 'Não autorizado' };
 
-  const name = formData.get('name') as string;
-  const color = formData.get('color') as string;
-  const limit = formData.get('monthlyLimit') as string;
-
-  if (!name || !color) throw new Error('Invalid data');
+  // Parse and validate with Zod
+  const rawData = Object.fromEntries(formData);
+  const validation = categorySchema.safeParse(rawData);
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message };
+  }
+  const { name, color, monthlyLimit } = validation.data;
 
   await db.insert(categories).values({
     userId: session.user.id,
     name,
     color,
-    monthlyLimit: limit ? parseFloat(limit).toString() : '0',
+    monthlyLimit: monthlyLimit.toString(),
   });
 
   revalidatePath('/categories');
@@ -29,7 +33,7 @@ export async function addCategory(formData: FormData) {
 
 export async function deleteCategory(id: string) {
   const session = await getSession();
-  if (!session) throw new Error('Unauthorized');
+  if (!session) return { error: 'Não autorizado' };
 
   await db.delete(categories).where(
     and(
@@ -44,18 +48,20 @@ export async function deleteCategory(id: string) {
 
 export async function updateCategory(id: string, formData: FormData) {
   const session = await getSession();
-  if (!session) throw new Error('Unauthorized');
+  if (!session) return { error: 'Não autorizado' };
 
-  const name = formData.get('name') as string;
-  const color = formData.get('color') as string;
-  const limit = formData.get('monthlyLimit') as string;
-
-  if (!name || !color) throw new Error('Invalid data');
+  // Parse and validate with Zod
+  const rawData = Object.fromEntries(formData);
+  const validation = categorySchema.safeParse(rawData);
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message };
+  }
+  const { name, color, monthlyLimit } = validation.data;
 
   await db.update(categories).set({
     name,
     color,
-    monthlyLimit: limit ? parseFloat(limit).toString() : '0',
+    monthlyLimit: monthlyLimit.toString(),
   }).where(
     and(
       eq(categories.id, id),

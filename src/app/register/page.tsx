@@ -1,9 +1,17 @@
 'use client';
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { register } from '@/lib/auth';
 import Link from 'next/link';
 
 export default function RegisterPage() {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [age, setAge] = useState('');
+  const [incomeRange, setIncomeRange] = useState('');
+  const [financialGoal, setFinancialGoal] = useState('');
+  const [password, setPassword] = useState('');
+
   const [state, formAction, pending] = useActionState(async (prevState: { error: string }, formData: FormData) => {
     const res = await register(formData);
     if (res?.error) return { error: res.error };
@@ -29,6 +37,8 @@ export default function RegisterPage() {
             <input 
               type="text" 
               name="name" 
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               placeholder="Como quer ser chamado"
               className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-brand transition-colors"
               required 
@@ -40,6 +50,8 @@ export default function RegisterPage() {
             <input 
               type="email" 
               name="email" 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               placeholder="seu@email.com"
               className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-brand transition-colors"
               required 
@@ -51,6 +63,8 @@ export default function RegisterPage() {
             <input 
               type="text" 
               name="phone" 
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
               placeholder="(xx) xxxxx-xxxx"
               className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-brand transition-colors"
             />
@@ -61,6 +75,8 @@ export default function RegisterPage() {
               <input 
                 type="number" 
                 name="age" 
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
                 placeholder="Sua idade"
                 className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-brand transition-colors"
               />
@@ -69,6 +85,8 @@ export default function RegisterPage() {
               <label className="block text-sm font-medium text-slate-300 mb-1">Faixa de Renda</label>
               <select 
                 name="incomeRange" 
+                value={incomeRange}
+                onChange={(e) => setIncomeRange(e.target.value)}
                 className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-brand transition-colors appearance-none cursor-pointer"
               >
                 <option value="" className="bg-slate-950 text-slate-400">Não informado</option>
@@ -84,6 +102,8 @@ export default function RegisterPage() {
             <label className="block text-sm font-medium text-slate-300 mb-1">Objetivo Financeiro</label>
             <select 
               name="financialGoal" 
+              value={financialGoal}
+              onChange={(e) => setFinancialGoal(e.target.value)}
               className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-brand transition-colors appearance-none cursor-pointer"
             >
               <option value="" className="bg-slate-950 text-slate-400">Não informado</option>
@@ -99,6 +119,8 @@ export default function RegisterPage() {
             <input 
               type="password" 
               name="password" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               placeholder="Sua senha secreta"
               className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-brand transition-colors"
               required 

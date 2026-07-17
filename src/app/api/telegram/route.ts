@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { extractFinancialData, extractInvoiceTransactions } from "@/lib/gemini";
 import { sendTelegramMessage, answerCallbackQuery } from "@/lib/telegram";
 import { getPaymentMethodSuggestion } from "@/lib/telegram-utils";
+import { rateLimit } from "@/lib/rate-limit";
 
 // Polyfill DOMMatrix for Node.js environments (used by pdfjs-dist inside pdf-parse)
 if (typeof global !== 'undefined' && !('DOMMatrix' in global)) {
@@ -58,6 +59,12 @@ async function extractTextFromPdf(buffer: Buffer): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
+  // Apply Rate Limiting (max 60 requests per minute from Telegram)
+  const limiter = await rateLimit(60, 60000);
+  if (!limiter.success) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   let chatId: string | undefined = undefined;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || req.nextUrl.origin || 'http://localhost:3000';
 
