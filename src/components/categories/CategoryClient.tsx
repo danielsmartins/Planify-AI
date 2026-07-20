@@ -18,7 +18,15 @@ interface CategoryData {
   color: string;
 }
 
-export function CategoryClient({ categories, budgetData }: { categories: CategoryProps[], budgetData: CategoryData[] }) {
+export function CategoryClient({ 
+  categories, 
+  budgetData,
+  spentByCategory
+}: { 
+  categories: CategoryProps[], 
+  budgetData: CategoryData[],
+  spentByCategory: Record<string, number>
+}) {
   const [isPending, startTransition] = useTransition();
   const [editingCategory, setEditingCategory] = useState<CategoryProps | null>(null);
 
@@ -45,6 +53,14 @@ export function CategoryClient({ categories, budgetData }: { categories: Categor
     }
   };
 
+  // Calcular limites consolidados
+  const categoriesWithLimits = categories.filter(c => parseFloat(c.monthlyLimit) > 0);
+  const totalLimit = categoriesWithLimits.reduce((sum, cat) => sum + parseFloat(cat.monthlyLimit), 0);
+  const totalSpentInLimitedCategories = categoriesWithLimits.reduce((sum, cat) => sum + (spentByCategory[cat.name] || 0), 0);
+  const percentUsed = totalLimit > 0 ? (totalSpentInLimitedCategories / totalLimit) * 100 : 0;
+  const isOverBudget = totalSpentInLimitedCategories > totalLimit;
+  const maxBarValue = Math.max(totalSpentInLimitedCategories, totalLimit);
+
   return (
     <>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -53,6 +69,67 @@ export function CategoryClient({ categories, budgetData }: { categories: Categor
             <Target className="text-brand" />
             Minhas Categorias e Metas
           </h2>
+
+          {/* Gráfico de Barra de Carregamento Consolidada das Metas */}
+          {totalLimit > 0 && (
+            <div className={`glass-panel p-6 rounded-2xl mb-6 border transition-all duration-300 ${isOverBudget ? 'border-rose-500/30' : 'border-neutral-800'}`}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-300">Progresso Geral das Metas</h3>
+                  <p className="text-[10px] text-slate-500">Consumo consolidado das categorias com limite no mês</p>
+                </div>
+                <div className="flex items-baseline gap-1.5 sm:text-right">
+                  <span className="text-lg font-bold text-white">
+                    {`R$ ${totalSpentInLimitedCategories.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    / {`R$ ${totalLimit.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  </span>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ml-2 ${isOverBudget ? 'bg-rose-500/10 text-rose-455 text-rose-400' : 'bg-brand/10 text-brand'}`}>
+                    {percentUsed.toFixed(0)}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Stacked Progress Bar */}
+              <div className="w-full h-3 bg-neutral-900 rounded-full overflow-hidden flex border border-neutral-800/40 relative">
+                {categoriesWithLimits.map((cat) => {
+                  const spent = spentByCategory[cat.name] || 0;
+                  if (spent === 0) return null;
+                  const segmentWidth = (spent / maxBarValue) * 100;
+                  
+                  return (
+                    <div
+                      key={cat.id}
+                      style={{ 
+                        width: `${segmentWidth}%`, 
+                        backgroundColor: cat.color 
+                      }}
+                      className="h-full transition-all duration-500 first:rounded-l-full last:rounded-r-full hover:opacity-80 cursor-pointer"
+                      title={`${cat.name}: R$ ${spent.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Sub-legend for categories inside the bar */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4">
+                {categoriesWithLimits.map((cat) => {
+                  const spent = spentByCategory[cat.name] || 0;
+                  const percentOfCategoryLimit = parseFloat(cat.monthlyLimit) > 0 ? (spent / parseFloat(cat.monthlyLimit)) * 100 : 0;
+                  return (
+                    <div key={cat.id} className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }}></span>
+                      <span className="font-medium text-slate-300">{cat.name}:</span>
+                      <span>
+                        {`R$ ${spent.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} ({percentOfCategoryLimit.toFixed(0)}%)
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           
           {categories.length === 0 ? (
             <p className="text-slate-500">Nenhuma categoria cadastrada. Crie uma ao lado!</p>
@@ -97,6 +174,34 @@ export function CategoryClient({ categories, budgetData }: { categories: Categor
                       }
                     </p>
                   </div>
+
+                  {/* Barra de Progresso Individual da Categoria */}
+                  {parseFloat(cat.monthlyLimit) > 0 && (() => {
+                    const spent = spentByCategory[cat.name] || 0;
+                    const limit = parseFloat(cat.monthlyLimit);
+                    const percentage = Math.min((spent / limit) * 100, 100);
+                    const overLimit = spent > limit;
+                    
+                    return (
+                      <div className="pl-3 mt-2 pt-2 border-t border-neutral-900/60">
+                        <div className="flex justify-between items-center text-[10px] text-slate-400 mb-1.5">
+                          <span>Consumido</span>
+                          <span className={overLimit ? 'text-rose-455 text-rose-400 font-semibold' : 'text-slate-300'}>
+                            {`R$ ${spent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${(spent / limit * 100).toFixed(0)}%)`}
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-neutral-900 rounded-full overflow-hidden">
+                          <div 
+                            style={{ 
+                              width: `${percentage}%`, 
+                              backgroundColor: overLimit ? '#f43f5e' : cat.color 
+                            }} 
+                            className="h-full rounded-full transition-all duration-500"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ))}
             </div>

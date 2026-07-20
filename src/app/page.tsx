@@ -3,7 +3,7 @@ import { Wallet, Send } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { db } from '@/db';
 import { transactions, categories, creditCards, accounts, subscriptions } from '@/db/schema';
-import { eq, desc, and, sql } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import { ActionButtons } from '@/components/dashboard/ActionButtons';
 import { ExpensesChart } from '@/components/dashboard/ExpensesChart';
 import { AiAdvisor } from '@/components/dashboard/AiAdvisor';
@@ -51,31 +51,25 @@ export default async function Home({
   const startOfMonth = new Date(year, monthIndex, 1);
   const endOfMonth = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
 
-  // Buscando transações reais (apenas confirmadas) e apenas do MÊS SELECIONADO
-  // Se planned for true, buscamos todas (confirmadas e pendentes). Se for false, apenas confirmadas.
-  const conditions = [
-    eq(transactions.userId, session.user.id),
-    sql`${transactions.createdAt} >= ${startOfMonth}`,
-    sql`${transactions.createdAt} <= ${endOfMonth}`
-  ];
-
-  if (!planned) {
-    conditions.push(eq(transactions.status, 'confirmed'));
-  }
-
-  const userTransactions = await db.select()
+  // Buscar todas as transações do usuário (confirmadas e pendentes) de uma vez só
+  const allUserTransactions = await db.select()
     .from(transactions)
-    .where(and(...conditions))
+    .where(eq(transactions.userId, session.user.id))
     .orderBy(desc(transactions.createdAt));
 
-  // Buscar todos os pagamentos de fatura para saber quais faturas estão pagas
-  const invoicePayments = await db.select()
-    .from(transactions)
-    .where(and(
-      eq(transactions.userId, session.user.id),
-      eq(transactions.status, 'confirmed'),
-      sql`account_id IS NOT NULL AND credit_card_id IS NOT NULL`
-    ));
+  // Filtrar as transações do mês selecionado
+  const userTransactions = allUserTransactions.filter(tx => {
+    const txDate = new Date(tx.createdAt);
+    const inMonth = txDate >= startOfMonth && txDate <= endOfMonth;
+    if (!inMonth) return false;
+    if (!planned) return tx.status === 'confirmed';
+    return true;
+  });
+
+  // Filtrar pagamentos de fatura confirmados
+  const invoicePayments = allUserTransactions.filter(
+    (tx) => tx.status === 'confirmed' && tx.accountId !== null && tx.creditCardId !== null
+  );
 
   // Buscar contas, categorias, cartões e assinaturas
   const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, session.user.id));
@@ -104,52 +98,83 @@ export default async function Home({
     isPendingPayment?: boolean;
   }
 
-  const projectedTxs: ExtendedTransaction[] = [];
+  // Lógica de projeção de assinaturas para o mês selecionado e meses intermediários
+  const allProjectedTxs: ExtendedTransaction[] = [];
 
   if (planned) {
-    userSubscriptions.forEach((sub) => {
-      // Verificar se o vencimento cai no mês selecionado
-      const nextBilling = new Date(sub.nextBillingDate);
-      let shouldBill = false;
-      
-      if (sub.billingCycle === 'monthly') {
-        const targetMonthDate = new Date(year, monthIndex, 1);
-        const billingMonthDate = new Date(nextBilling.getFullYear(), nextBilling.getMonth(), 1);
-        shouldBill = targetMonthDate >= billingMonthDate;
-      } else if (sub.billingCycle === 'yearly') {
-        shouldBill = nextBilling.getMonth() === monthIndex;
-      }
+    const currentY = now.getFullYear();
+    const currentM = now.getMonth();
+    const targetY = year;
+    const targetM = monthIndex;
 
-      if (shouldBill) {
-        // Verificar se já existe transação com a mesma descrição no mês selecionado (confirmada ou pendente)
-        const alreadyCharged = userTransactions.some(
-          (tx) => tx.description.toLowerCase().trim() === sub.name.toLowerCase().trim()
-        );
+    // Iterar mês a mês do mês atual até o mês selecionado (apenas se for igual ou futuro)
+    let tempY = currentY;
+    let tempM = currentM;
 
-        if (!alreadyCharged) {
-          const day = nextBilling.getDate();
-          const lastDayOfMonth = new Date(year, monthIndex + 1, 0).getDate();
-          const actualDay = Math.min(day, lastDayOfMonth);
-          const projectedDate = new Date(year, monthIndex, actualDay, 12, 0, 0);
+    while (tempY < targetY || (tempY === targetY && tempM <= targetM)) {
+      const monthStart = new Date(tempY, tempM, 1);
+      const monthEnd = new Date(tempY, tempM + 1, 0, 23, 59, 59, 999);
 
-          projectedTxs.push({
-            id: `projected-sub-${sub.id}`,
-            userId: session.user.id,
-            amount: sub.amount,
-            description: sub.name,
-            category: sub.category,
-            type: 'expense',
-            status: 'pending',
-            installmentId: null,
-            creditCardId: sub.creditCardId || null,
-            accountId: sub.accountId || null,
-            createdAt: projectedDate,
-            isProjected: true,
-          });
+      // Buscar transações reais nesse mês específico
+      const monthTransactions = allUserTransactions.filter(tx => {
+        const txDate = new Date(tx.createdAt);
+        return txDate >= monthStart && txDate <= monthEnd;
+      });
+
+      userSubscriptions.forEach((sub) => {
+        const nextBilling = new Date(sub.nextBillingDate);
+        let shouldBill = false;
+
+        if (sub.billingCycle === 'monthly') {
+          const billingMonthDate = new Date(nextBilling.getFullYear(), nextBilling.getMonth(), 1);
+          shouldBill = monthStart >= billingMonthDate;
+        } else if (sub.billingCycle === 'yearly') {
+          shouldBill = nextBilling.getMonth() === tempM;
         }
+
+        if (shouldBill) {
+          const alreadyCharged = monthTransactions.some(
+            (tx) => tx.description.toLowerCase().trim() === sub.name.toLowerCase().trim()
+          );
+
+          if (!alreadyCharged) {
+            const day = nextBilling.getDate();
+            const lastDayOfMonth = monthEnd.getDate();
+            const actualDay = Math.min(day, lastDayOfMonth);
+            const projectedDate = new Date(tempY, tempM, actualDay, 12, 0, 0);
+
+            allProjectedTxs.push({
+              id: `projected-sub-${sub.id}-${tempY}-${tempM}`,
+              userId: session.user.id,
+              amount: sub.amount,
+              description: sub.name,
+              category: sub.category,
+              type: 'expense',
+              status: 'pending',
+              installmentId: null,
+              creditCardId: sub.creditCardId || null,
+              accountId: sub.accountId || null,
+              createdAt: projectedDate,
+              isProjected: true,
+            });
+          }
+        }
+      });
+
+      // Avançar mês
+      tempM++;
+      if (tempM > 11) {
+        tempM = 0;
+        tempY++;
       }
-    });
+    }
   }
+
+  // As transações projetadas exibidas na lista do mês selecionado são apenas as daquele mês
+  const projectedTxs = allProjectedTxs.filter(tx => {
+    const txDate = new Date(tx.createdAt);
+    return txDate >= startOfMonth && txDate <= endOfMonth;
+  });
 
   // Mesclar transações e ordenar por data decrescente
   const allTxs: ExtendedTransaction[] = [
@@ -202,13 +227,8 @@ export default async function Home({
     });
   }
 
-  // Buscar todas as transações confirmadas do usuário para calcular o histórico real
-  const allConfirmedTransactions = await db.select()
-    .from(transactions)
-    .where(and(
-      eq(transactions.userId, session.user.id),
-      eq(transactions.status, 'confirmed')
-    ));
+  // Transações confirmadas a partir de todas as buscadas
+  const allConfirmedTransactions = allUserTransactions.filter(tx => tx.status === 'confirmed');
 
   // Calcular dívida do cartão de crédito (despesas confirmadas no crédito)
   let creditCardDebt = 0;
@@ -302,25 +322,123 @@ export default async function Home({
     }))
     .sort((a, b) => b.value - a.value);
 
-  // Calcular receitas e despesas planejadas para o Saldo Projetado
+  // Calcular receitas, despesas e saldo projetado
   let plannedIncome = 0;
   let plannedExpense = 0;
+  let projectedBalance = totalBalance;
 
-  userTransactions.forEach((tx) => {
-    const val = parseFloat(tx.amount);
-    const isCardPayment = tx.accountId && tx.creditCardId;
-    if (!isCardPayment) {
-      if (tx.type === 'income') plannedIncome += val;
-      else plannedExpense += val;
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  let startingBankBalanceOfCurrentMonth = totalBalance;
+
+  allConfirmedTransactions.forEach((tx) => {
+    const txDate = new Date(tx.createdAt);
+    if (txDate >= currentMonthStart && txDate <= now) {
+      const val = parseFloat(tx.amount);
+      if (tx.accountId) {
+        if (tx.type === 'income') {
+          startingBankBalanceOfCurrentMonth -= val;
+        } else {
+          startingBankBalanceOfCurrentMonth += val;
+        }
+      }
     }
   });
 
-  projectedTxs.forEach((tx) => {
-    const val = parseFloat(tx.amount);
-    plannedExpense += val;
-  });
+  if (startOfMonth < currentMonthStart) {
+    // Alvo é um mês passado: regressão do saldo
+    let startingBankBalance = startingBankBalanceOfCurrentMonth;
+    allConfirmedTransactions.forEach((tx) => {
+      const txDate = new Date(tx.createdAt);
+      if (txDate >= startOfMonth && txDate < currentMonthStart) {
+        const val = parseFloat(tx.amount);
+        if (tx.accountId) {
+          if (tx.type === 'income') {
+            startingBankBalance -= val;
+          } else {
+            startingBankBalance += val;
+          }
+        }
+      }
+    });
 
-  const projectedBalance = totalBalance + plannedIncome - plannedExpense;
+    userTransactions.forEach((tx) => {
+      const val = parseFloat(tx.amount);
+      const isCardPayment = tx.accountId && tx.creditCardId;
+      if (!isCardPayment) {
+        if (tx.type === 'income') plannedIncome += val;
+        else plannedExpense += val;
+      }
+    });
+
+    projectedTxs.forEach((tx) => {
+      const val = parseFloat(tx.amount);
+      plannedExpense += val;
+    });
+
+    projectedBalance = startingBankBalance + plannedIncome - plannedExpense;
+  } else {
+    // Alvo é o mês atual ou um mês futuro: progressão mês a mês a partir do início do mês atual
+    let runningBalance = startingBankBalanceOfCurrentMonth;
+    const startYear = now.getFullYear();
+    const startMonth = now.getMonth();
+    const targetYear = year;
+    const targetMonthIndex = monthIndex;
+
+    let tempY = startYear;
+    let tempM = startMonth;
+
+    while (tempY < targetYear || (tempY === targetYear && tempM <= targetMonthIndex)) {
+      const mStart = new Date(tempY, tempM, 1);
+      const mEnd = new Date(tempY, tempM + 1, 0, 23, 59, 59, 999);
+
+      let mPlannedIncome = 0;
+      let mPlannedExpense = 0;
+
+      const mTransactions = allUserTransactions.filter((tx) => {
+        const txDate = new Date(tx.createdAt);
+        return txDate >= mStart && txDate <= mEnd;
+      });
+
+      mTransactions.forEach((tx) => {
+        const val = parseFloat(tx.amount);
+        const isCardPayment = tx.accountId && tx.creditCardId;
+        if (!isCardPayment) {
+          if (tx.type === 'income') {
+            mPlannedIncome += val;
+          } else {
+            mPlannedExpense += val;
+          }
+        }
+      });
+
+      const mProjectedTxs = allProjectedTxs.filter((tx) => {
+        const txDate = new Date(tx.createdAt);
+        return txDate >= mStart && txDate <= mEnd;
+      });
+
+      mProjectedTxs.forEach((tx) => {
+        const val = parseFloat(tx.amount);
+        mPlannedExpense += val;
+      });
+
+      const mEndBalance = runningBalance + mPlannedIncome - mPlannedExpense;
+
+      if (tempY === targetYear && tempM === targetMonthIndex) {
+        plannedIncome = mPlannedIncome;
+        plannedExpense = mPlannedExpense;
+        projectedBalance = mEndBalance;
+        break;
+      }
+
+      runningBalance = mEndBalance;
+
+      tempM++;
+      if (tempM > 11) {
+        tempM = 0;
+        tempY++;
+      }
+    }
+  }
 
   return (
     <div className="py-6 transition-all duration-700 ease-out select-none">

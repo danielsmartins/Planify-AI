@@ -1,8 +1,8 @@
 import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { db } from '@/db';
-import { categories } from '@/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { categories, transactions } from '@/db/schema';
+import { eq, desc, and, sql } from 'drizzle-orm';
 import { CategoryClient } from '@/components/categories/CategoryClient';
 
 export default async function CategoriesPage() {
@@ -26,6 +26,31 @@ export default async function CategoriesPage() {
     }))
     .sort((a, b) => b.value - a.value);
 
+  // Buscar despesas confirmadas do mês atual para o gráfico de progresso
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  const userExpenses = await db.select()
+    .from(transactions)
+    .where(and(
+      eq(transactions.userId, session.user.id),
+      eq(transactions.type, 'expense'),
+      eq(transactions.status, 'confirmed'),
+      sql`${transactions.createdAt} >= ${startOfMonth}`,
+      sql`${transactions.createdAt} <= ${endOfMonth}`
+    ));
+
+  const spentByCategory: Record<string, number> = {};
+
+  userExpenses.forEach(tx => {
+    const isCardPayment = tx.accountId && tx.creditCardId;
+    if (!isCardPayment) {
+      const amountVal = parseFloat(tx.amount);
+      spentByCategory[tx.category] = (spentByCategory[tx.category] || 0) + amountVal;
+    }
+  });
+
   return (
     <div className="py-2">
       <header className="mb-8">
@@ -37,7 +62,11 @@ export default async function CategoriesPage() {
         </p>
       </header>
 
-      <CategoryClient categories={userCategories} budgetData={budgetData} />
+      <CategoryClient 
+        categories={userCategories} 
+        budgetData={budgetData} 
+        spentByCategory={spentByCategory}
+      />
     </div>
   );
 }
