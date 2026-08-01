@@ -14,7 +14,17 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json-summary', 'html', 'lcov'],
       reportsDirectory: './coverage',
-      exclude: ['node_modules/', '.next/', 'vitest.config.ts', 'vitest.setup.ts', 'scripts/'],
+      all: true,
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: [
+        'node_modules/',
+        '.next/',
+        'vitest.config.ts',
+        'vitest.setup.ts',
+        'scripts/',
+        'src/**/*.test.{ts,tsx}',
+        'src/**/*.d.ts',
+      ],
     },
   },
 });
