@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { extractInvoiceTransactions } from '@/lib/gemini';
 import { db } from '@/db';

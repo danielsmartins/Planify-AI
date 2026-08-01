@@ -10,5 +10,11 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary', 'html', 'lcov'],
+      reportsDirectory: './coverage',
+      exclude: ['node_modules/', '.next/', 'vitest.config.ts', 'vitest.setup.ts', 'scripts/'],
+    },
   },
 });

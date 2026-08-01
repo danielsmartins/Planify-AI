@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, MouseEvent } from 'react';
+import React, { useState, type MouseEvent } from 'react';
 
 interface GlowCardProps {
   children: React.ReactNode;
@@ -10,11 +10,11 @@ interface GlowCardProps {
 export function GlowCard({ children, className = '' }: GlowCardProps) {
   const [coords, setCoords] = useState({ x: 0, y: 0 });
 
-  const handleMouseMove = (e: MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
+  const handleMouseMove = (element: MouseEvent<HTMLDivElement>) => {
+    const rect = element.currentTarget.getBoundingClientRect();
     setCoords({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: element.clientX - rect.left,
+      y: element.clientY - rect.top,
     });
   };
 
