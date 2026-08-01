@@ -91,7 +91,7 @@ export default async function TransactionsPage({
   });
 
   return (
-    <div className="py-2 pb-12">
+    <div className="py-2 pb-24 md:pb-12">
       <header className="mb-8">
         <h1 className="text-3xl font-extrabold tracking-tight">
           Histórico de <span className="text-gradient">Transações</span>
@@ -107,38 +107,65 @@ export default async function TransactionsPage({
         {paginatedTransactionsWithStatus.length === 0 ? (
           <p className="text-slate-400 text-center py-8">Nenhuma transação encontrada.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-neutral-900 text-[10px] uppercase font-bold text-neutral-500 tracking-wider">
-                  <th className="pb-3 px-4">Data</th>
-                  <th className="pb-3 px-4">Estabelecimento / Categoria</th>
-                  <th className="pb-3 px-4">Origem</th>
-                  <th className="pb-3 px-4">Status</th>
-                  <th className="pb-3 px-4 text-right">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedTransactionsWithStatus.map((tx) => (
-                  <TransactionRow 
-                    key={tx.id} 
-                    id={tx.id}
-                    description={tx.description}
-                    amount={parseFloat(tx.amount)}
-                    type={tx.type as TransactionType}
-                    category={tx.category}
-                    date={new Date(tx.createdAt).toLocaleDateString('pt-BR')}
-                    createdAt={new Date(tx.createdAt).toISOString()}
-                    accountId={tx.accountId}
-                    creditCardId={tx.creditCardId}
-                    accountName={tx.accountId ? (userAccounts.find(a => a.id === tx.accountId)?.name) : null}
-                    creditCardName={tx.creditCardId ? (userCards.find(c => c.id === tx.creditCardId)?.name) : null}
-                    categoriesList={userCategories}
-                    isPendingPayment={tx.isPendingPayment}
-                  />
-                ))}
-              </tbody>
-            </table>
+          <div className="flex flex-col gap-4">
+            {/* Mobile View: Cards */}
+            <div className="md:hidden flex flex-col gap-3">
+              {paginatedTransactionsWithStatus.map((tx) => (
+                <TransactionRow 
+                  key={`card-${tx.id}`} 
+                  id={tx.id}
+                  description={tx.description}
+                  amount={parseFloat(tx.amount)}
+                  type={tx.type as TransactionType}
+                  category={tx.category}
+                  date={new Date(tx.createdAt).toLocaleDateString('pt-BR')}
+                  createdAt={new Date(tx.createdAt).toISOString()}
+                  accountId={tx.accountId}
+                  creditCardId={tx.creditCardId}
+                  accountName={tx.accountId ? (userAccounts.find(a => a.id === tx.accountId)?.name) : null}
+                  creditCardName={tx.creditCardId ? (userCards.find(c => c.id === tx.creditCardId)?.name) : null}
+                  categoriesList={userCategories}
+                  isPendingPayment={tx.isPendingPayment}
+                  layout="card"
+                />
+              ))}
+            </div>
+
+            {/* Desktop View: Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-neutral-900 text-[10px] uppercase font-bold text-neutral-500 tracking-wider">
+                    <th className="pb-3 px-4">Data</th>
+                    <th className="pb-3 px-4">Estabelecimento / Categoria</th>
+                    <th className="pb-3 px-4">Origem</th>
+                    <th className="pb-3 px-4">Status</th>
+                    <th className="pb-3 px-4 text-right">Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedTransactionsWithStatus.map((tx) => (
+                    <TransactionRow 
+                      key={`table-${tx.id}`} 
+                      id={tx.id}
+                      description={tx.description}
+                      amount={parseFloat(tx.amount)}
+                      type={tx.type as TransactionType}
+                      category={tx.category}
+                      date={new Date(tx.createdAt).toLocaleDateString('pt-BR')}
+                      createdAt={new Date(tx.createdAt).toISOString()}
+                      accountId={tx.accountId}
+                      creditCardId={tx.creditCardId}
+                      accountName={tx.accountId ? (userAccounts.find(a => a.id === tx.accountId)?.name) : null}
+                      creditCardName={tx.creditCardId ? (userCards.find(c => c.id === tx.creditCardId)?.name) : null}
+                      categoriesList={userCategories}
+                      isPendingPayment={tx.isPendingPayment}
+                      layout="table"
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

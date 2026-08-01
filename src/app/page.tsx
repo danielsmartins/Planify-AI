@@ -441,7 +441,7 @@ export default async function Home({
   }
 
   return (
-    <div className="py-6 transition-all duration-700 ease-out select-none">
+    <div className="py-6 pb-24 md:pb-6 transition-all duration-700 ease-out select-none">
       {/* Header */}
       <header className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4 border-b border-neutral-900 pb-6">
         <div>
@@ -565,7 +565,32 @@ export default async function Home({
               </div>
             ) : (
               <div className="flex flex-col gap-4">
-                <div className="overflow-x-auto">
+                {/* Mobile View: Cards */}
+                <div className="md:hidden flex flex-col gap-3">
+                  {latestTransactions.map((tx) => (
+                    <TransactionRow 
+                      key={`card-${tx.id}`} 
+                      id={tx.id}
+                      description={tx.description}
+                      amount={parseFloat(tx.amount)}
+                      type={tx.type as TransactionType}
+                      category={tx.category}
+                      date={new Date(tx.createdAt).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}
+                      createdAt={new Date(tx.createdAt).toISOString()}
+                      accountId={tx.accountId}
+                      creditCardId={tx.creditCardId}
+                      accountName={tx.accountId ? (userAccounts.find(a => a.id === tx.accountId)?.name) : null}
+                      creditCardName={tx.creditCardId ? (userCards.find(c => c.id === tx.creditCardId)?.name) : null}
+                      categoriesList={userCategories}
+                      isProjected={tx.isProjected}
+                      isPendingPayment={tx.isPendingPayment}
+                      layout="card"
+                    />
+                  ))}
+                </div>
+
+                {/* Desktop View: Table */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b border-neutral-900 text-[10px] uppercase font-bold text-neutral-500 tracking-wider">
@@ -579,7 +604,7 @@ export default async function Home({
                     <tbody>
                       {latestTransactions.map((tx) => (
                         <TransactionRow 
-                          key={tx.id} 
+                          key={`table-${tx.id}`} 
                           id={tx.id}
                           description={tx.description}
                           amount={parseFloat(tx.amount)}
@@ -594,6 +619,7 @@ export default async function Home({
                           categoriesList={userCategories}
                           isProjected={tx.isProjected}
                           isPendingPayment={tx.isPendingPayment}
+                          layout="table"
                         />
                       ))}
                     </tbody>

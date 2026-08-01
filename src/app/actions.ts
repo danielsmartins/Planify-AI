@@ -98,6 +98,28 @@ export async function createTransaction(formData: FormData) {
   return { success: true };
 }
 
+export async function parseTransactionViaAI(text: string) {
+  const session = await getSession();
+  if (!session) return { error: 'Not authenticated' };
+
+  if (!text || !text.trim()) return { error: 'Texto não pode ser vazio.' };
+
+  try {
+    const userCategories = await db.select().from(categories).where(eq(categories.userId, session.user.id));
+    const categoryNames = userCategories.map(c => c.name);
+
+    const extractedData = await extractFinancialData(text, categoryNames);
+    if (!extractedData) return { error: 'Não consegui entender a transação. Tente ser mais claro, ex: "Uber 25 reais no Nubank".' };
+
+    return { success: true, data: extractedData };
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message === 'RATE_LIMIT') {
+      return { error: 'Limite grátis de Inteligência Artificial atingido. Tente novamente mais tarde.' };
+    }
+    return { error: 'Erro interno ao processar com IA.' };
+  }
+}
+
 export async function addTransactionViaAI(text: string) {
   const session = await getSession();
   if (!session) return { error: 'Not authenticated' };

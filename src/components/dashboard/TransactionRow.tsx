@@ -22,6 +22,7 @@ interface TransactionProps {
   isProjected?: boolean;
   isPendingPayment?: boolean;
   createdAt: string;
+  layout?: 'table' | 'card';
 }
 
 const CategoryIcon = ({ category, type }: { category: string, type: TransactionType }) => {
@@ -49,7 +50,8 @@ export function TransactionRow({
   categoriesList = [],
   isProjected = false,
   isPendingPayment = false,
-  createdAt
+  createdAt,
+  layout = 'table'
 }: TransactionProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -85,6 +87,120 @@ export function TransactionRow({
     paymentLabel = `Crédito: ${creditCardName}`;
   } else if (accountName) {
     paymentLabel = accountName;
+  }
+
+  const renderEditModal = () => (
+    isEditing && (
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="glass-panel p-6 rounded-2xl w-full max-w-md relative animate-in fade-in zoom-in duration-200">
+          <button onClick={() => setIsEditing(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"><X size={20}/></button>
+          <h2 className="text-xl font-bold mb-6">Editar Transação</h2>
+
+          <form onSubmit={handleEdit} className="flex flex-col gap-4">
+            <div>
+              <label className="block text-sm text-slate-300 mb-1">Descrição</label>
+              <input required name="description" defaultValue={description} type="text" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-300 mb-1">Data da Transação</label>
+              <input required name="createdAt" defaultValue={createdAt.split('T')[0]} type="date" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-300 mb-1">Valor (R$)</label>
+              <input required name="amount" defaultValue={amount} type="number" step="0.01" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-300 mb-1">Categoria</label>
+              {categoriesList.length > 0 ? (
+                <select required name="category" defaultValue={category} className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors">
+                  <option value={category}>{category}</option>
+                  {categoriesList.filter(c => c.name !== category).map(c => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <input required name="category" defaultValue={category} type="text" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" />
+              )}
+            </div>
+            <button disabled={isPending} type="submit" className="w-full bg-brand hover:bg-brand-light text-black font-semibold py-3 rounded-xl mt-4 cursor-pointer disabled:opacity-50">
+              {isPending ? 'Salvando...' : 'Salvar Alterações'}
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  );
+
+  if (layout === 'card') {
+    return (
+      <>
+        <div className={`bg-neutral-950 border border-neutral-850/90 rounded-2xl p-4 flex flex-col gap-3 transition-colors ${isProjected ? 'opacity-60 border-dashed' : ''}`}>
+          {/* Top Row: Icon, Description, Category & Amount */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 shrink-0 text-slate-300">
+                <CategoryIcon category={category} type={type} />
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-100 text-sm leading-snug truncate">{description}</p>
+                <p className="text-[11px] text-neutral-400 mt-0.5">{category} • {date}</p>
+              </div>
+            </div>
+
+            <div className="text-right shrink-0">
+              <span className={`font-bold text-sm sm:text-base ${type === 'income' ? 'text-emerald-400' : 'text-slate-100'}`}>
+                {type === 'income' ? '+' : '-'}{formattedAmount}
+              </span>
+            </div>
+          </div>
+
+          {/* Bottom Row: Badges & Action Buttons */}
+          <div className="flex items-center justify-between border-t border-neutral-900/80 pt-2.5 mt-0.5 gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {paymentLabel ? (
+                <span className="bg-neutral-900 border border-neutral-800/80 text-slate-300 px-2.5 py-0.5 rounded-lg text-[10px] font-medium tracking-wide">
+                  {paymentLabel}
+                </span>
+              ) : null}
+
+              {(isProjected || isPendingPayment) ? (
+                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 border-dashed">
+                  PREVISTO
+                </span>
+              ) : (
+                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${type === 'income' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-neutral-900 text-neutral-400 border border-neutral-800'}`}>
+                  {type === 'income' ? 'RECEBIDO' : 'PAGO'}
+                </span>
+              )}
+            </div>
+
+            {/* Touch Action Buttons */}
+            {!isProjected && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button 
+                  onClick={() => setIsEditing(true)}
+                  disabled={isPending}
+                  className="p-1.5 text-neutral-400 hover:text-white bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg transition-colors cursor-pointer"
+                  title="Editar"
+                >
+                  <Edit2 size={13} />
+                </button>
+                <button 
+                  onClick={handleDelete}
+                  disabled={isPending}
+                  className="p-1.5 text-neutral-400 hover:text-rose-400 bg-neutral-900 hover:bg-rose-950/30 border border-neutral-800 rounded-lg transition-colors cursor-pointer"
+                  title="Excluir"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {renderEditModal()}
+      </>
+    );
   }
 
   return (
@@ -126,7 +242,6 @@ export function TransactionRow({
         </td>
         <td className="py-3 px-4 text-right font-semibold text-sm">
           <div className="flex items-center justify-end gap-3">
-            {/* Ações (invisíveis por padrão, aparecem no hover) */}
             {!isProjected && (
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button 
@@ -154,46 +269,7 @@ export function TransactionRow({
         </td>
       </tr>
 
-      {/* Edit Modal */}
-      {isEditing && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="glass-panel p-6 rounded-2xl w-full max-w-md relative animate-in fade-in zoom-in duration-200">
-            <button onClick={() => setIsEditing(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"><X size={20}/></button>
-            <h2 className="text-xl font-bold mb-6">Editar Transação</h2>
-
-            <form onSubmit={handleEdit} className="flex flex-col gap-4">
-              <div>
-                <label className="block text-sm text-slate-300 mb-1">Descrição</label>
-                <input required name="description" defaultValue={description} type="text" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" />
-              </div>
-              <div>
-                <label className="block text-sm text-slate-300 mb-1">Data da Transação</label>
-                <input required name="createdAt" defaultValue={createdAt.split('T')[0]} type="date" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors text-sm" />
-              </div>
-              <div>
-                <label className="block text-sm text-slate-300 mb-1">Valor (R$)</label>
-                <input required name="amount" defaultValue={amount} type="number" step="0.01" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" />
-              </div>
-              <div>
-                <label className="block text-sm text-slate-300 mb-1">Categoria</label>
-                {categoriesList.length > 0 ? (
-                  <select required name="category" defaultValue={category} className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors">
-                    <option value={category}>{category}</option>
-                    {categoriesList.filter(c => c.name !== category).map(c => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input required name="category" defaultValue={category} type="text" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" />
-                )}
-              </div>
-              <button disabled={isPending} type="submit" className="w-full bg-brand hover:bg-brand-light text-black font-semibold py-3 rounded-xl mt-4 cursor-pointer disabled:opacity-50">
-                {isPending ? 'Salvando...' : 'Salvar Alterações'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+      {renderEditModal()}
     </>
   );
 }
