@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { db } from '@/db';
 import { transactions, categories, accounts, creditCards } from '@/db/schema';
 import { eq, desc, and, lte, sql } from 'drizzle-orm';
-import { TransactionRow, TransactionType } from '@/components/dashboard/TransactionRow';
+import { TransactionRow, type TransactionType } from '@/components/dashboard/TransactionRow';
 import { TransactionFilters } from '@/components/transactions/TransactionFilters';
 import Link from 'next/link';
 

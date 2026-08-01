@@ -1,4 +1,4 @@
-import { TransactionRow, TransactionType, DashboardFilters } from '@/components/dashboard/TransactionRow';
+import { TransactionRow, type TransactionType, DashboardFilters } from '@/components/dashboard/TransactionRow';
 import { Wallet, Send } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { db } from '@/db';

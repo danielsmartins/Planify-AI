@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+quality-gate-report.md
 
 # next.js
 /.next/
