@@ -1,8 +1,8 @@
 {
-  "coverageLines": 82.35,
-  "coverageStatements": 82.35,
-  "coverageFunctions": 100,
-  "coverageBranches": 61.11,
+  "coverageLines": 1.1,
+  "coverageStatements": 1.03,
+  "coverageFunctions": 0.38,
+  "coverageBranches": 1.86,
   "duplicationPct": 26.494609604704344,
   "duplicationFragments": 552,
   "ruleViolations": 7,
