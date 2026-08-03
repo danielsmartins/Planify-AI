@@ -23,12 +23,13 @@ Este arquivo contém as regras específicas para testes automatizados da aplica�
 ## 3. Quality Gate & Cobertura de Testes
 - **Métricas do Quality Gate**: Execute `npm run test:coverage` e `npm run quality-gate` para gerar e validar os relatórios de cobertura e verificar regressões de código, arquivos com tamanho excessivo (>300 linhas) e duplicações.
 - **Ampliação da Cobertura**: Sempre que criar novas funções utilitárias ou refatorar componentes/lógicas de negócio, crie arquivos de testes em `src/lib/*.test.ts` ou `src/components/*.test.tsx` visando elevar gradualmente a cobertura de testes do projeto.
+- **PROIBIDO Atualizar Baseline Localmente**: **NUNCA** execute `node scripts/quality-gate.js --update-baseline` nem altere o arquivo `.quality-gate-baseline.json`. O arquivo de baseline reflete a branch principal (`main`) e só deve ser atualizado pelo pipeline CI/CD do GitHub no merge.
 
 ---
 
 ## 4. Comandos Importantes
 - **Execução Única**: `npx vitest run` para rodar todos os testes do projeto uma única vez.
 - **Execução com Cobertura**: `npm run test:coverage` para gerar os relatórios de cobertura do Vitest (`coverage/coverage-summary.json`).
-- **Quality Gate**: `npm run quality-gate` para executar o script de medição de qualidade.
+- **Quality Gate**: `npm run quality-gate` (sem `--update-baseline`) para executar a verificação e comparar com a baseline do main.
 - **Modo Assistido (Watch)**: `npm run test` (ou `npx vitest`) para manter o runner ativo reexecutando testes mediante alterações de arquivos.
 - **Integração Contínua (Local)**: Sempre rode a suíte completa de testes e o quality gate antes de realizar commits, push ou finalizar tarefas.
