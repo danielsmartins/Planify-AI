@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { deleteInstallment, updateInstallment } from '@/app/installments/actions';
 import { createInstallmentPurchase } from '@/app/actions';
-import { Trash2, Edit2, CreditCard, DollarSign, X, Plus } from 'lucide-react';
+import { Trash2, Edit2, CreditCard, DollarSign, X, Plus, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
 
 interface InstallmentProps {
   id: string;
@@ -17,6 +17,7 @@ interface InstallmentProps {
   accountId?: string | null;
   creditCardId?: string | null;
   createdAt: string;
+  isFinished?: boolean;
 }
 
 export function InstallmentClient({ 
@@ -34,11 +35,16 @@ export function InstallmentClient({
   const [editingInstallment, setEditingInstallment] = useState<InstallmentProps | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [addError, setAddError] = useState('');
+  const [showFinished, setShowFinished] = useState(false);
 
-  const handleDelete = (id: string) => {
-    if (confirm('Atenção: Excluir este parcelamento irá apagar também TODAS as faturas futuras vinculadas a ele. Transações passadas serão mantidas. Deseja continuar?')) {
+  const handleDelete = (id: string, keepTransactions: boolean = true) => {
+    const message = keepTransactions
+      ? 'Deseja remover este parcelamento da lista? O histórico de transações passadas continuará gravado em seus relatórios.'
+      : 'Deseja excluir este parcelamento? Suas transações no histórico serão desvinculadas e mantidas.';
+
+    if (confirm(message)) {
       startTransition(() => {
-        deleteInstallment(id);
+        deleteInstallment(id, keepTransactions);
       });
     }
   };
@@ -101,8 +107,10 @@ export function InstallmentClient({
     });
   };
 
-  // Metricas
+  // Métricas e separação entre ativos e encerrados
   const activeInstallments = installments.filter(i => i.paidCount < i.installmentsCount);
+  const finishedInstallments = installments.filter(i => i.paidCount >= i.installmentsCount);
+
   const totalDebt = activeInstallments.reduce((acc, curr) => acc + Number(curr.remainingAmount), 0);
   const monthlyCommitment = activeInstallments.reduce((acc, curr) => acc + Number(curr.installmentValue), 0);
 
@@ -113,7 +121,7 @@ export function InstallmentClient({
   return (
     <>
       <div className="flex justify-between items-center mb-8 mt-[-2.5rem]">
-        <div /> {/* Espaçador para manter o botão à direita, o título está na page */}
+        <div /> {/* Espaçador para manter o botão à direita */}
         <button 
           onClick={() => setIsAdding(true)} 
           className="bg-brand hover:bg-brand-light text-black flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer"
@@ -144,20 +152,20 @@ export function InstallmentClient({
         </div>
       </div>
 
+      {/* Grid de Parcelamentos Ativos */}
       <div className="space-y-4">
-        {installments.length === 0 ? (
+        {activeInstallments.length === 0 ? (
           <div className="glass-panel p-12 text-center rounded-2xl">
-            <p className="text-slate-400 mb-2">Você não tem compras parceladas cadastradas.</p>
-            <p className="text-sm text-slate-500">Adicione compras parceladas pelo modal de &quot;Nova Despesa&quot; no Dashboard.</p>
+            <p className="text-slate-400 mb-2">Você não tem compras parceladas ativas em andamento.</p>
+            <p className="text-sm text-slate-500">Adicione novas compras pelo botão acima ou registre pelo Dashboard.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {installments.map((inst) => {
-              const isFinished = inst.paidCount >= inst.installmentsCount;
+            {activeInstallments.map((inst) => {
               const progressPct = Math.min((inst.paidCount / inst.installmentsCount) * 100, 100);
 
               return (
-                <div key={inst.id} className={`glass-panel p-5 rounded-2xl flex flex-col gap-4 group relative overflow-hidden transition-all ${isFinished ? 'opacity-60 grayscale' : ''}`}>
+                <div key={inst.id} className="glass-panel p-5 rounded-2xl flex flex-col gap-4 group relative overflow-hidden transition-all">
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="font-bold text-lg leading-tight">{inst.description}</h3>
@@ -168,21 +176,20 @@ export function InstallmentClient({
                       <button 
                         onClick={() => setEditingInstallment(inst)}
                         disabled={isPending}
-                        className="p-1.5 text-slate-500 hover:text-brand transition-colors rounded-lg disabled:opacity-50"
+                        className="p-1.5 text-slate-500 hover:text-brand transition-colors rounded-lg disabled:opacity-50 cursor-pointer"
                         title="Editar"
                       >
                         <Edit2 size={16} />
                       </button>
                       <button 
-                        onClick={() => handleDelete(inst.id)}
+                        onClick={() => handleDelete(inst.id, true)}
                         disabled={isPending}
-                        className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors rounded-lg disabled:opacity-50"
+                        className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors rounded-lg disabled:opacity-50 cursor-pointer"
                         title="Excluir"
                       >
                         <Trash2 size={16} />
                       </button>
                     </div>
-
                   </div>
 
                   <div className="space-y-1">
@@ -208,6 +215,93 @@ export function InstallmentClient({
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* Divisão: Parcelamentos Encerrados (Dropdown) */}
+      <div className="mt-10 pt-6 border-t border-neutral-900">
+        <button
+          onClick={() => setShowFinished(!showFinished)}
+          className="w-full flex items-center justify-between p-4 bg-neutral-950/80 hover:bg-neutral-900/80 border border-neutral-850 rounded-2xl transition-all cursor-pointer text-left group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-neutral-900 text-neutral-400 group-hover:text-white border border-neutral-800 transition-colors">
+              <CheckCircle2 size={18} className="text-emerald-400" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm text-neutral-200 group-hover:text-white transition-colors">
+                Parcelamentos Encerrados ({finishedInstallments.length})
+              </h3>
+              <p className="text-xs text-neutral-500">
+                Compras totalmente quitadas que foram encerradas.
+              </p>
+            </div>
+          </div>
+          <div className="text-neutral-400 group-hover:text-white transition-colors p-1">
+            {showFinished ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </div>
+        </button>
+
+        {showFinished && (
+          <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-200">
+            {finishedInstallments.length === 0 ? (
+              <div className="p-6 text-center text-xs text-neutral-500 glass-panel rounded-2xl">
+                Nenhum parcelamento encerrado até o momento.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {finishedInstallments.map((inst) => {
+                  return (
+                    <div key={inst.id} className="glass-panel p-5 rounded-2xl flex flex-col gap-4 group relative overflow-hidden transition-all bg-neutral-950/40 border-neutral-850">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-bold text-base leading-tight text-neutral-300">{inst.description}</h3>
+                            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-semibold">
+                              Encerrado
+                            </span>
+                          </div>
+                          <p className="text-xs text-neutral-500 mt-1">{inst.category}</p>
+                        </div>
+                        
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all focus-within:opacity-100">
+                          <button 
+                            onClick={() => handleDelete(inst.id, true)}
+                            disabled={isPending}
+                            className="p-1.5 text-neutral-500 hover:text-rose-400 transition-colors rounded-lg disabled:opacity-50 cursor-pointer"
+                            title="Excluir parcelamento encerrado (mantém histórico)"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs text-neutral-400">
+                          <span>Progresso ({inst.installmentsCount}/{inst.installmentsCount})</span>
+                          <span className="font-medium text-emerald-400">100%</span>
+                        </div>
+                        <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+                          <div className="bg-emerald-500 h-full rounded-full" style={{ width: '100%' }}></div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 mt-1 border-t border-neutral-900 pt-3 text-xs">
+                        <div>
+                          <p className="text-[11px] text-neutral-500">Valor da Parcela</p>
+                          <p className="font-semibold text-neutral-300">{formatBRL(inst.installmentValue)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-neutral-500">Total Pago</p>
+                          <p className="font-semibold text-emerald-400">{formatBRL(inst.totalAmount)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>

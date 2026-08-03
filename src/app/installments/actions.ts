@@ -8,17 +8,29 @@ import { eq, and } from 'drizzle-orm';
 import { calculateCreditCardDate } from '@/app/actions';
 import { updateInstallmentSchema } from '@/lib/validations';
 
-export async function deleteInstallment(id: string) {
+export async function deleteInstallment(id: string, keepTransactions: boolean = true) {
   const session = await getSession();
   if (!session) return { error: 'Não autorizado' };
 
-  // Primeiro deleta todas as transações vinculadas a este installment que ainda estao pendentes/confirmadas
-  await db.delete(transactions).where(
-    and(
-      eq(transactions.installmentId, id),
-      eq(transactions.userId, session.user.id)
-    )
-  );
+  if (keepTransactions) {
+    // Preserva o histórico financeiro desvinculando o installmentId das transações existentes
+    await db.update(transactions)
+      .set({ installmentId: null })
+      .where(
+        and(
+          eq(transactions.installmentId, id),
+          eq(transactions.userId, session.user.id)
+        )
+      );
+  } else {
+    // Remove todas as transações vinculadas a este installment
+    await db.delete(transactions).where(
+      and(
+        eq(transactions.installmentId, id),
+        eq(transactions.userId, session.user.id)
+      )
+    );
+  }
 
   // Depois deleta o installment master
   await db.delete(installments).where(
