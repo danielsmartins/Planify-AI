@@ -1,5 +1,5 @@
 import { TransactionRow, type TransactionType, DashboardFilters } from '@/components/dashboard/TransactionRow';
-import { Wallet, Send } from 'lucide-react';
+import { Wallet, Send, HelpCircle } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { db } from '@/db';
 import { transactions, categories, creditCards, accounts, subscriptions } from '@/db/schema';
@@ -201,7 +201,7 @@ export default async function Home({
   let totalExpense = 0;
   let plannedExpense = 0;
 
-  // 1. Receitas e Despesas consolidadas / pagas do mês
+  // 1. Receitas e Despesas do mês
   monthTransactions.forEach((tx) => {
     const val = parseFloat(tx.amount);
     const isCardPayment = tx.accountId && tx.creditCardId;
@@ -209,18 +209,33 @@ export default async function Home({
       if (tx.type === 'income' && tx.status === 'confirmed') {
         totalIncome += val;
       } else if (tx.type === 'expense') {
-        if (tx.status === 'confirmed') {
-          totalExpense += val;
+        // Despesas totais do mês (inclui despesas pagas e pendentes)
+        totalExpense += val;
+
+        // Despesas planejadas incluem SOMENTE as despesas que ainda NÃO foram pagas
+        let isUnpaid = tx.status === 'pending';
+        if (tx.creditCardId && !tx.accountId) {
+          const txDueDate = new Date(tx.dueDate || tx.createdAt);
+          const hasPayment = invoicePayments.some(p => 
+            p.creditCardId === tx.creditCardId && 
+            new Date(p.createdAt).getMonth() === txDueDate.getMonth() && 
+            new Date(p.createdAt).getFullYear() === txDueDate.getFullYear()
+          );
+          isUnpaid = !hasPayment;
         }
-        // Despesas planejadas incluem todas as despesas (confirmadas + pendentes)
-        plannedExpense += val;
+
+        if (isUnpaid) {
+          plannedExpense += val;
+        }
       }
     }
   });
 
-  // 2. Incluir assinaturas projetadas para o mês em Despesas Planejadas
+  // 2. Incluir assinaturas projetadas para o mês em Despesas Totais e em Despesas Planejadas (A Pagar)
   projectedTxs.forEach((tx) => {
-    plannedExpense += parseFloat(tx.amount);
+    const val = parseFloat(tx.amount);
+    totalExpense += val;
+    plannedExpense += val;
   });
 
   // Saldo real consolidado atual
@@ -409,13 +424,42 @@ export default async function Home({
                 <span className="text-[10px] text-neutral-500 font-semibold block mb-0.5">Receitas</span>
                 <span className="text-sm sm:text-base font-bold text-white">{formatBRL(totalIncome)}</span>
               </div>
-              <div>
-                <span className="text-[10px] text-neutral-500 font-semibold block mb-0.5">Despesas</span>
+              <div className="group relative">
+                <div className="flex items-center gap-1 mb-0.5 cursor-help">
+                  <span className="text-[10px] text-neutral-500 font-semibold uppercase tracking-wider">Despesas</span>
+                  <HelpCircle size={11} className="text-neutral-500 group-hover:text-neutral-300 transition-colors" />
+                </div>
                 <span className="text-sm sm:text-base font-bold text-white">{formatBRL(totalExpense)}</span>
+                
+                {/* Tooltip ao passar o mouse */}
+                <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 w-56 p-3 bg-neutral-950 border border-neutral-800 text-neutral-300 text-[11px] rounded-xl shadow-2xl backdrop-blur-md pointer-events-none transition-all duration-200">
+                  <p className="font-semibold text-white mb-1 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                    Total de Despesas
+                  </p>
+                  <p className="text-neutral-400 leading-normal">
+                    Soma de <strong className="text-neutral-200">todas as despesas</strong> do mês (inclui despesas já pagas, pendentes e projetadas).
+                  </p>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] text-neutral-500 font-semibold block mb-0.5">Desp. Planejadas</span>
+
+              <div className="group relative">
+                <div className="flex items-center gap-1 mb-0.5 cursor-help">
+                  <span className="text-[10px] text-neutral-500 font-semibold uppercase tracking-wider">Desp. Planejadas</span>
+                  <HelpCircle size={11} className="text-violet-400/70 group-hover:text-violet-300 transition-colors" />
+                </div>
                 <span className="text-sm sm:text-base font-bold text-violet-400">{formatBRL(plannedExpense)}</span>
+                
+                {/* Tooltip ao passar o mouse */}
+                <div className="absolute right-0 sm:left-0 bottom-full mb-2 hidden group-hover:block z-50 w-60 p-3 bg-neutral-950 border border-neutral-800 text-neutral-300 text-[11px] rounded-xl shadow-2xl backdrop-blur-md pointer-events-none transition-all duration-200">
+                  <p className="font-semibold text-violet-300 mb-1 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-violet-400"></span>
+                    Despesas Planejadas (A Pagar)
+                  </p>
+                  <p className="text-neutral-400 leading-normal">
+                    Soma apenas das despesas que <strong className="text-white font-medium">ainda não foram pagas</strong> (inclui lançamentos pendentes e assinaturas projetadas).
+                  </p>
+                </div>
               </div>
             </div>
           </div>
