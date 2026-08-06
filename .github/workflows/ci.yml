@@ -5,6 +5,9 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
+
+
 
 permissions:
   contents: write
@@ -46,6 +49,12 @@ jobs:
           node scripts/quality-gate.js
         fi
 
+    - name: Post Quality Gate PR Comment
+      if: always() && github.event_name == 'pull_request'
+      uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        path: quality-gate-report.md
+
     - name: Commit and Push Updated Baseline
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
@@ -54,14 +63,9 @@ jobs:
         git add .quality-gate-baseline.json
         if ! git diff --staged --quiet; then
           git commit -m "chore(ci): update quality gate baseline [skip ci]"
-          git push
+          git push origin HEAD:${{ github.ref_name }}
         fi
-
-    - name: Post Quality Gate PR Comment
-      if: github.event_name == 'pull_request'
-      uses: marocchino/sticky-pull-request-comment@v2
-      with:
-        path: quality-gate-report.md
 
     - name: Build Project
       run: npm run build
+
