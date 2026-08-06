@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateCreditCardDate, getInvoiceDueDateForDate, getInvoiceKey, formatInvoiceMonthYear } from './credit-card-helpers';
+import { calculateCreditCardDate, getInvoiceDueDateForDate, getInvoiceKey, formatInvoiceMonthYear, getTxDueDate } from './credit-card-helpers';
 
 describe('credit-card-helpers', () => {
   it('calculates transaction due date correctly when dueDay < closingDay', () => {
@@ -56,4 +56,16 @@ describe('credit-card-helpers', () => {
     expect(formatInvoiceMonthYear('2026-08')).toBe('Agosto de 2026');
     expect(formatInvoiceMonthYear('2026-12')).toBe('Dezembro de 2026');
   });
+
+  it('assigns purchase after closing day to the next invoice (e.g. July 18 purchase on Nubank closes Aug 5, due Aug 12)', () => {
+    // Nubank: Fechamento dia 05, Vencimento dia 12
+    // Compra em 18 de Julho (após 05/07) pertence à fatura que fecha em 05/08 e vence em 12/08 (Fatura de Agosto)
+    const tx = { createdAt: '2026-07-18T12:00:00.000Z', dueDate: null };
+    const dueDate = getTxDueDate(tx, 5, 12);
+    expect(dueDate.getFullYear()).toBe(2026);
+    expect(dueDate.getMonth()).toBe(7); // Agosto (index 7)
+    expect(dueDate.getDate()).toBe(12);
+    expect(getInvoiceKey(dueDate)).toBe('2026-08');
+  });
 });
+
