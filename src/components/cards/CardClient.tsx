@@ -5,7 +5,8 @@ import { deleteCreditCard, updateCreditCard, addCreditCard, payCreditCardInvoice
 import { deleteTransaction } from '@/app/actions';
 import { CreditCard, Trash2, Edit2, Plus, Calendar, X, Upload, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { getInvoiceDueDateForDate, getInvoiceKey, formatInvoiceMonthYear } from '@/lib/credit-card-helpers';
+import { getInvoiceDueDateForDate, getInvoiceKey, formatInvoiceMonthYear, getTxDueDate } from '@/lib/credit-card-helpers';
+
 
 
 interface CardProps {
@@ -63,13 +64,14 @@ export function CardClient({
 
     const invMap = new Map<string, { purchases: number; payments: number }>();
     cardTxs.forEach(t => {
-      const key = getInvoiceKey(new Date(t.dueDate || t.createdAt));
+      const key = getInvoiceKey(getTxDueDate(t, Number(card.closingDay), Number(card.dueDay)));
       if (!invMap.has(key)) invMap.set(key, { purchases: 0, payments: 0 });
       const item = invMap.get(key)!;
       const val = parseFloat(t.amount);
       if (t.accountId) item.payments += val;
       else item.purchases += val;
     });
+
 
     let keyToSelect = defaultKey;
     const sortedKeys = Array.from(invMap.keys()).sort();
@@ -659,10 +661,14 @@ export function CardClient({
         const now = new Date();
         const cardTxs = transactions.filter(t => t.creditCardId === viewingCardDetails.id);
 
+        const closingDayNum = Number(viewingCardDetails.closingDay);
+        const dueDayNum = Number(viewingCardDetails.dueDay);
+
         // Gerar lista de chaves de faturas para o seletor (transações + range de 6 meses atrás até 6 meses à frente)
         const invoiceKeysSet = new Set<string>();
         cardTxs.forEach(t => {
-          invoiceKeysSet.add(getInvoiceKey(new Date(t.dueDate || t.createdAt)));
+          const txDueDate = getTxDueDate(t, closingDayNum, dueDayNum);
+          invoiceKeysSet.add(getInvoiceKey(txDueDate));
         });
 
         // Garantir range de meses ao redor da data atual
@@ -672,7 +678,7 @@ export function CardClient({
         }
 
         const allInvoiceKeys = Array.from(invoiceKeysSet).sort();
-        const activeKey = selectedInvoiceKey || getInvoiceKey(getInvoiceDueDateForDate(now, Number(viewingCardDetails.closingDay), Number(viewingCardDetails.dueDay)));
+        const activeKey = selectedInvoiceKey || getInvoiceKey(getInvoiceDueDateForDate(now, closingDayNum, dueDayNum));
         const currentKeyIndex = allInvoiceKeys.indexOf(activeKey);
 
         const prevInvoiceKey = currentKeyIndex > 0 ? allInvoiceKeys[currentKeyIndex - 1] : null;
@@ -682,9 +688,6 @@ export function CardClient({
         const [selectedYearStr, selectedMonthStr] = activeKey.split('-');
         const selectedYear = parseInt(selectedYearStr);
         const selectedMonth = parseInt(selectedMonthStr) - 1; // 0-indexed
-
-        const closingDayNum = Number(viewingCardDetails.closingDay);
-        const dueDayNum = Number(viewingCardDetails.dueDay);
 
         const daysInDueMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
         const actualDueDay = Math.min(dueDayNum, daysInDueMonth);
@@ -714,9 +717,11 @@ export function CardClient({
 
         // Transações da fatura selecionada
         const selectedInvoiceTxs = cardTxs.filter(t => {
-          const k = getInvoiceKey(new Date(t.dueDate || t.createdAt));
+          const txDueDate = getTxDueDate(t, closingDayNum, dueDayNum);
+          const k = getInvoiceKey(txDueDate);
           return k === activeKey;
         });
+
 
         const purchases = selectedInvoiceTxs.filter(t => !t.accountId).reduce((sum, t) => sum + parseFloat(t.amount), 0);
         const payments = selectedInvoiceTxs.filter(t => t.accountId).reduce((sum, t) => sum + parseFloat(t.amount), 0);

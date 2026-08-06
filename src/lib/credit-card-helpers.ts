@@ -80,3 +80,15 @@ export function formatInvoiceMonthYear(invoiceKey: string): string {
   const monthName = d.toLocaleDateString('pt-BR', { month: 'long' });
   return `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} de ${year}`;
 }
+
+export function getTxDueDate(
+  t: { dueDate?: string | Date | null; createdAt: string | Date },
+  closingDay: number,
+  dueDay: number
+): Date {
+  if (t.dueDate) {
+    return new Date(t.dueDate);
+  }
+  return calculateCreditCardDate(new Date(t.createdAt), closingDay, dueDay);
+}
+

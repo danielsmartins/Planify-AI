@@ -7,8 +7,7 @@ import { CardClient } from '@/components/cards/CardClient';
 import { processAutoPayments } from '@/lib/auto-pay';
 import { processPendingSubscriptions } from '@/lib/subscriptions-billing';
 
-import { getInvoiceDueDateForDate, getInvoiceKey } from '@/lib/credit-card-helpers';
-
+import { getInvoiceDueDateForDate, getInvoiceKey, getTxDueDate } from '@/lib/credit-card-helpers';
 
 export async function CardsPage() {
   const session = await getSession();
@@ -35,13 +34,17 @@ export async function CardsPage() {
   // Calcular valor devedor de cada cartão do mês atual/pendente (compras - pagamentos de fatura)
   const cardsWithBalances = userCards.map(card => {
     const cardTxs = cardTransactions.filter(t => t.creditCardId === card.id);
-    const defaultDueDate = getInvoiceDueDateForDate(now, Number(card.closingDay), Number(card.dueDay));
+    const closingDayNum = Number(card.closingDay);
+    const dueDayNum = Number(card.dueDay);
+    const defaultDueDate = getInvoiceDueDateForDate(now, closingDayNum, dueDayNum);
     const defaultKey = getInvoiceKey(defaultDueDate);
     
     // Mapear saldo por chave de fatura YYYY-MM
     const invoicesMap = new Map<string, { purchases: number; payments: number }>();
     cardTxs.forEach(t => {
-      const key = getInvoiceKey(new Date(t.dueDate || t.createdAt));
+      const txDueDate = getTxDueDate(t, closingDayNum, dueDayNum);
+      const key = getInvoiceKey(txDueDate);
+
       if (!invoicesMap.has(key)) {
         invoicesMap.set(key, { purchases: 0, payments: 0 });
       }
