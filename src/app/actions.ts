@@ -8,27 +8,12 @@ import { eq, and } from 'drizzle-orm';
 import { extractFinancialData } from '@/lib/gemini';
 import { transactionSchema, installmentPurchaseSchema } from '@/lib/validations';
 
-export async function calculateCreditCardDate(baseDate: Date, closingDay: number, dueDay: number): Promise<Date> {
-  const resultDate = new Date(baseDate);
-  const currentDay = resultDate.getDate();
-  
-  let monthOffset = 0;
-  if (currentDay >= closingDay) {
-    monthOffset = 1;
-  }
-  
-  if (dueDay < closingDay) {
-    monthOffset += 1;
-  }
-  
-  resultDate.setMonth(resultDate.getMonth() + monthOffset);
-  resultDate.setDate(dueDay);
+import { calculateCreditCardDate as calcCCDate } from '@/lib/credit-card-helpers';
 
-  // Tratando corner cases se dueDay for 31 e o mês cair em Fev, resultDate vai pro mes seguinte
-  // Mas new Date(2026, 1, 31) vira Março 3, que geralmente as operadoras ajustam pro último dia util
-  // Pra manter simples, vamos deixar o JS converter.
-  return resultDate;
+export async function calculateCreditCardDate(baseDate: Date, closingDay: number, dueDay: number): Promise<Date> {
+  return calcCCDate(baseDate, closingDay, dueDay);
 }
+
 
 export async function createTransaction(formData: FormData) {
   const session = await getSession();

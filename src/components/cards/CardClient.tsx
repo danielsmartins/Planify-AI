@@ -3,8 +3,10 @@
 import { useState, useTransition } from 'react';
 import { deleteCreditCard, updateCreditCard, addCreditCard, payCreditCardInvoice } from '@/app/cards/actions';
 import { deleteTransaction } from '@/app/actions';
-import { CreditCard, Trash2, Edit2, Plus, Calendar, X, Upload, Sparkles } from 'lucide-react';
+import { CreditCard, Trash2, Edit2, Plus, Calendar, X, Upload, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { getInvoiceDueDateForDate, getInvoiceKey, formatInvoiceMonthYear } from '@/lib/credit-card-helpers';
+
 
 interface CardProps {
   id: string;
@@ -51,6 +53,38 @@ export function CardClient({
 
   // Card Details Modal State
   const [viewingCardDetails, setViewingCardDetails] = useState<CardProps | null>(null);
+  const [selectedInvoiceKey, setSelectedInvoiceKey] = useState<string>('');
+
+  const openCardDetails = (card: CardProps) => {
+    const now = new Date();
+    const cardTxs = transactions.filter(t => t.creditCardId === card.id);
+    const defaultDueDate = getInvoiceDueDateForDate(now, Number(card.closingDay), Number(card.dueDay));
+    const defaultKey = getInvoiceKey(defaultDueDate);
+
+    const invMap = new Map<string, { purchases: number; payments: number }>();
+    cardTxs.forEach(t => {
+      const key = getInvoiceKey(new Date(t.dueDate || t.createdAt));
+      if (!invMap.has(key)) invMap.set(key, { purchases: 0, payments: 0 });
+      const item = invMap.get(key)!;
+      const val = parseFloat(t.amount);
+      if (t.accountId) item.payments += val;
+      else item.purchases += val;
+    });
+
+    let keyToSelect = defaultKey;
+    const sortedKeys = Array.from(invMap.keys()).sort();
+    for (const k of sortedKeys) {
+      const inv = invMap.get(k)!;
+      if (inv.purchases - inv.payments > 0.01 && k <= defaultKey) {
+        keyToSelect = k;
+        break;
+      }
+    }
+
+    setSelectedInvoiceKey(keyToSelect);
+    setViewingCardDetails(card);
+  };
+
 
   // Pay Invoice State
   const [payingCard, setPayingCard] = useState<CardProps | null>(null);
@@ -211,7 +245,7 @@ export function CardClient({
             return (
               <div 
                 key={card.id} 
-                onClick={() => setViewingCardDetails(card)}
+                onClick={() => openCardDetails(card)}
                 className="relative group overflow-hidden rounded-2xl aspect-[1.6/1] p-6 flex flex-col justify-between shadow-xl cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all duration-300" 
                 style={{ background: `linear-gradient(135deg, ${card.color} 0%, ${card.color}cc 100%)` }}
               >
@@ -620,92 +654,86 @@ export function CardClient({
         </div>
       )}
 
-      {/* Modal de Detalhes do Cartão */}
+      {/* Modal de Detalhes do Cartão com Navegação de Faturas */}
       {viewingCardDetails && (() => {
         const now = new Date();
-        // Função auxiliar para calcular datas de fatura (vencimento e fechamento)
-        // O createdAt no banco de dados já armazena a data de vencimento da fatura correspondente.
-        const getTxInvoiceDates = (createdAtStr: string, closingDayStr: string, dueDayStr: string) => {
-          const txDate = new Date(createdAtStr);
-          const closingDay = parseInt(closingDayStr);
-          const dueDay = parseInt(dueDayStr);
-          
-          let closingMonth = txDate.getMonth();
-          let closingYear = txDate.getFullYear();
-          
-          // Se o dia de fechamento for maior que o dia de vencimento, o fechamento ocorreu no mês anterior
-          if (closingDay > dueDay) {
-            closingMonth -= 1;
-            if (closingMonth < 0) {
-              closingMonth = 11;
-              closingYear -= 1;
-            }
+        const cardTxs = transactions.filter(t => t.creditCardId === viewingCardDetails.id);
+
+        // Gerar lista de chaves de faturas para o seletor (transações + range de 6 meses atrás até 6 meses à frente)
+        const invoiceKeysSet = new Set<string>();
+        cardTxs.forEach(t => {
+          invoiceKeysSet.add(getInvoiceKey(new Date(t.dueDate || t.createdAt)));
+        });
+
+        // Garantir range de meses ao redor da data atual
+        for (let i = -6; i <= 6; i++) {
+          const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+          invoiceKeysSet.add(getInvoiceKey(d));
+        }
+
+        const allInvoiceKeys = Array.from(invoiceKeysSet).sort();
+        const activeKey = selectedInvoiceKey || getInvoiceKey(getInvoiceDueDateForDate(now, Number(viewingCardDetails.closingDay), Number(viewingCardDetails.dueDay)));
+        const currentKeyIndex = allInvoiceKeys.indexOf(activeKey);
+
+        const prevInvoiceKey = currentKeyIndex > 0 ? allInvoiceKeys[currentKeyIndex - 1] : null;
+        const nextInvoiceKey = currentKeyIndex >= 0 && currentKeyIndex < allInvoiceKeys.length - 1 ? allInvoiceKeys[currentKeyIndex + 1] : null;
+
+        // Dados da fatura selecionada
+        const [selectedYearStr, selectedMonthStr] = activeKey.split('-');
+        const selectedYear = parseInt(selectedYearStr);
+        const selectedMonth = parseInt(selectedMonthStr) - 1; // 0-indexed
+
+        const closingDayNum = Number(viewingCardDetails.closingDay);
+        const dueDayNum = Number(viewingCardDetails.dueDay);
+
+        const daysInDueMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+        const actualDueDay = Math.min(dueDayNum, daysInDueMonth);
+        const invoiceDueDate = new Date(selectedYear, selectedMonth, actualDueDay, 12, 0, 0, 0);
+
+        let closingMonth = selectedMonth;
+        let closingYear = selectedYear;
+        if (dueDayNum <= closingDayNum) {
+          closingMonth -= 1;
+          if (closingMonth < 0) {
+            closingMonth = 11;
+            closingYear -= 1;
           }
-          
-          const invoiceClosingDate = new Date(closingYear, closingMonth, closingDay);
-          const invoiceDueDate = txDate;
-          
-          const format = (d: Date) => {
-            const day = d.getDate().toString().padStart(2, '0');
-            const month = (d.getMonth() + 1).toString().padStart(2, '0');
-            return `${day}/${month}`;
-          };
-          
-          // Referência da fatura (ex: vencimento em agosto -> fatura de julho)
-          let invoiceMonth = txDate.getMonth() - 1;
-          let invoiceYear = txDate.getFullYear();
-          if (invoiceMonth < 0) {
-            invoiceMonth = 11;
-            invoiceYear -= 1;
-          }
-          
-          const monthName = new Date(invoiceYear, invoiceMonth, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-          
-          return {
-            monthName,
-            closing: format(invoiceClosingDate),
-            due: format(invoiceDueDate)
-          };
+        }
+        const daysInClosingMonth = new Date(closingYear, closingMonth + 1, 0).getDate();
+        const actualClosingDay = Math.min(closingDayNum, daysInClosingMonth);
+        const invoiceClosingDate = new Date(closingYear, closingMonth, actualClosingDay, 12, 0, 0, 0);
+
+        const formatDayMonth = (d: Date) => {
+          const day = d.getDate().toString().padStart(2, '0');
+          const month = (d.getMonth() + 1).toString().padStart(2, '0');
+          return `${day}/${month}`;
         };
 
-        // Calcular a data de vencimento da fatura atual do cartão com base no dia de hoje
-        const currentInvoiceDueDate = (() => {
-          const closingDay = parseInt(viewingCardDetails.closingDay);
-          const dueDay = parseInt(viewingCardDetails.dueDay);
-          const resultDate = new Date(now);
-          const currentDay = resultDate.getDate();
-          let monthOffset = 0;
-          if (currentDay >= closingDay) {
-            monthOffset = 1;
-          }
-          if (dueDay < closingDay) {
-            monthOffset += 1;
-          }
-          resultDate.setMonth(resultDate.getMonth() + monthOffset);
-          resultDate.setDate(dueDay);
-          return resultDate;
-        })();
+        const dueFormatted = formatDayMonth(invoiceDueDate);
+        const closingFormatted = formatDayMonth(invoiceClosingDate);
 
-        // Datas da fatura atual
-        const currentInvoiceDates = getTxInvoiceDates(currentInvoiceDueDate.toISOString(), viewingCardDetails.closingDay, viewingCardDetails.dueDay);
-
-        // Filtrar transações deste cartão
-        const cardTxs = transactions.filter(t => t.creditCardId === viewingCardDetails.id);
-        
-        // Transações da fatura atual (cujo mês de vencimento é o mês da fatura atual)
-        const currentInvoiceTxs = cardTxs.filter(t => {
-          const tDate = new Date(t.dueDate || t.createdAt);
-          return tDate.getMonth() === currentInvoiceDueDate.getMonth() && 
-                 tDate.getFullYear() === currentInvoiceDueDate.getFullYear();
+        // Transações da fatura selecionada
+        const selectedInvoiceTxs = cardTxs.filter(t => {
+          const k = getInvoiceKey(new Date(t.dueDate || t.createdAt));
+          return k === activeKey;
         });
 
-        // Transações futuras (meses de vencimento posteriores)
-        const futureInvoiceTxs = cardTxs.filter(t => {
-          const tDate = new Date(t.dueDate || t.createdAt);
-          return tDate.getTime() > currentInvoiceDueDate.getTime();
-        });
+        const purchases = selectedInvoiceTxs.filter(t => !t.accountId).reduce((sum, t) => sum + parseFloat(t.amount), 0);
+        const payments = selectedInvoiceTxs.filter(t => t.accountId).reduce((sum, t) => sum + parseFloat(t.amount), 0);
+        const netBalance = purchases - payments;
+        const outstandingBalance = netBalance > 0 ? netBalance : 0;
 
-        const currentInvoiceTotal = currentInvoiceTxs.filter(t => !t.accountId).reduce((sum, t) => sum + parseFloat(t.amount), 0) - currentInvoiceTxs.filter(t => t.accountId).reduce((sum, t) => sum + parseFloat(t.amount), 0);
+        // Status da fatura
+        let statusBadge = { label: 'EM ABERTO', color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' };
+        if (outstandingBalance <= 0.01 && purchases > 0) {
+          statusBadge = { label: 'PAGA', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
+        } else if (outstandingBalance <= 0.01 && purchases === 0) {
+          statusBadge = { label: 'SEM LANÇAMENTOS', color: 'bg-slate-500/10 text-slate-400 border-slate-500/20' };
+        } else if (invoiceDueDate < now) {
+          statusBadge = { label: 'VENCIDA', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
+        } else if (invoiceClosingDate <= now) {
+          statusBadge = { label: 'FECHADA / A VENCER', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' };
+        }
 
         return (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -722,27 +750,78 @@ export function CardClient({
                   <div className="w-4 h-4 rounded-full" style={{ backgroundColor: viewingCardDetails.color }}></div>
                   <h2 className="text-2xl font-bold text-white">{viewingCardDetails.name}</h2>
                 </div>
-                <p className="text-sm text-slate-400">Detalhamento dos lançamentos confirmados e faturas deste cartão.</p>
+                <p className="text-sm text-slate-400">Detalhamento dos lançamentos e faturas deste cartão.</p>
+              </div>
+
+              {/* Navegação entre Faturas por Mês */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-3.5 mb-6 flex items-center justify-between gap-3 shrink-0">
+                <button
+                  disabled={!prevInvoiceKey}
+                  onClick={() => prevInvoiceKey && setSelectedInvoiceKey(prevInvoiceKey)}
+                  className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  title="Fatura Anterior"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+
+                <div className="flex flex-col items-center flex-1">
+                  <div className="flex items-center gap-2 flex-wrap justify-center">
+                    <select
+                      value={activeKey}
+                      onChange={(e) => setSelectedInvoiceKey(e.target.value)}
+                      className="bg-slate-950 border border-slate-700 text-white text-sm font-bold rounded-lg px-3 py-1.5 focus:border-brand outline-none cursor-pointer"
+                    >
+                      {allInvoiceKeys.map(k => (
+                        <option key={k} value={k}>
+                          Fatura de {formatInvoiceMonthYear(k)}
+                        </option>
+                      ))}
+                    </select>
+                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${statusBadge.color}`}>
+                      {statusBadge.label}
+                    </span>
+                  </div>
+                  <span className="text-xs text-slate-400 mt-1">
+                    Fechamento: {closingFormatted} • Vencimento: {dueFormatted}
+                  </span>
+                </div>
+
+                <button
+                  disabled={!nextInvoiceKey}
+                  onClick={() => nextInvoiceKey && setSelectedInvoiceKey(nextInvoiceKey)}
+                  className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  title="Próxima Fatura"
+                >
+                  <ChevronRight size={18} />
+                </button>
               </div>
 
               <div className="overflow-y-auto pr-1 flex-1 space-y-6">
-                {/* Resumo da Fatura Atual */}
+                {/* Resumo da Fatura Selecionada */}
                 <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-5 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                   <div>
-                    <span className="text-xs text-slate-400 uppercase tracking-wider block font-semibold">Fatura de {now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</span>
-                    <p className="text-3xl font-extrabold text-white mt-1">{formatBRL(currentInvoiceTotal > 0 ? currentInvoiceTotal : 0)}</p>
-                    <span className="text-xs text-slate-500 block mt-1.5">Vencimento: {currentInvoiceDates.due} (Fechamento: {currentInvoiceDates.closing})</span>
+                    <span className="text-xs text-slate-400 uppercase tracking-wider block font-semibold">
+                      Fatura de {formatInvoiceMonthYear(activeKey)}
+                    </span>
+                    <p className="text-3xl font-extrabold text-white mt-1">
+                      {formatBRL(outstandingBalance)}
+                    </p>
+                    <div className="flex gap-3 text-xs text-slate-400 mt-1.5">
+                      <span>Total de compras: <strong className="text-slate-200">{formatBRL(purchases)}</strong></span>
+                      {payments > 0 && <span>Pagos: <strong className="text-emerald-400">{formatBRL(payments)}</strong></span>}
+                    </div>
                     {viewingCardDetails.autoPay && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-bold mt-2 px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 border-dashed">
                         Débito Automático Ativado ({accounts.find(a => a.id === viewingCardDetails.autoPayAccountId)?.name || 'Conta'})
                       </span>
                     )}
                   </div>
-                  {currentInvoiceTotal > 0 && (
+                  {outstandingBalance > 0 && (
                     <button
                       onClick={() => {
                         setPayingCard(viewingCardDetails);
-                        setPayAmount(currentInvoiceTotal.toString());
+                        setPayAmount(outstandingBalance.toString());
+                        setPayDate(invoiceDueDate.toISOString().split('T')[0]);
                         if (accounts.length > 0) setPayAccountId(accounts[0].id);
                         setViewingCardDetails(null);
                       }}
@@ -753,18 +832,19 @@ export function CardClient({
                   )}
                 </div>
 
-                {/* Compras na Fatura Atual */}
+                {/* Compras / Lançamentos na Fatura Selecionada */}
                 <div>
                   <h3 className="text-base font-bold text-slate-200 mb-3 flex items-center justify-between">
-                    <span>Lançamentos na Fatura Atual</span>
-                    <span className="text-xs text-slate-500 font-normal">{currentInvoiceTxs.length} item(ns)</span>
+                    <span>Lançamentos nesta Fatura</span>
+                    <span className="text-xs text-slate-500 font-normal">{selectedInvoiceTxs.length} item(ns)</span>
                   </h3>
-                  {currentInvoiceTxs.length === 0 ? (
-                    <p className="text-sm text-slate-500 py-6 text-center italic border border-dashed border-slate-800/60 rounded-xl bg-slate-900/10">Nenhum lançamento nesta fatura.</p>
+                  {selectedInvoiceTxs.length === 0 ? (
+                    <p className="text-sm text-slate-500 py-6 text-center italic border border-dashed border-slate-800/60 rounded-xl bg-slate-900/10">
+                      Nenhum lançamento nesta fatura.
+                    </p>
                   ) : (
                     <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/10 divide-y divide-slate-800">
-                      {currentInvoiceTxs.map(t => {
-                        const dates = getTxInvoiceDates(t.dueDate || t.createdAt, viewingCardDetails.closingDay, viewingCardDetails.dueDay);
+                      {selectedInvoiceTxs.map(t => {
                         return (
                           <div key={t.id} className="p-3.5 flex justify-between items-center text-sm group/item">
                             <div>
@@ -775,68 +855,12 @@ export function CardClient({
                                 </span>
                               </p>
                               <p className="text-xs text-slate-500 mt-1">
-                                {t.category} • Vencimento: {dates.due} (Fechamento: {dates.closing})
+                                {t.category} {t.accountId ? '• Pagamento efetuado' : ''}
                               </p>
                             </div>
                             <div className="flex items-center gap-3">
                               <span className={`font-bold text-sm ${t.accountId ? 'text-emerald-400' : 'text-slate-100'}`}>
                                 {t.accountId ? '+' : '-'}{formatBRL(t.amount)}
-                              </span>
-                              <button
-                                onClick={() => {
-                                  if (confirm(`Tem certeza que deseja excluir a transação "${t.description}"?`)) {
-                                    startTransition(() => {
-                                      deleteTransaction(t.id).then(() => {
-                                        router.refresh();
-                                        setViewingCardDetails(null);
-                                      });
-                                    });
-                                  }
-                                }}
-                                disabled={isPending}
-                                className="p-1.5 text-slate-600 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition-all opacity-0 group-hover/item:opacity-100 focus:opacity-100 cursor-pointer disabled:opacity-50"
-                                title="Excluir Transação"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Compras em Faturas Futuras */}
-                <div>
-                  <h3 className="text-base font-bold text-slate-200 mb-3 flex items-center justify-between">
-                    <span>Lançamentos Futuros (A vencer nos próximos meses)</span>
-                    <span className="text-xs text-slate-500 font-normal">
-                      {futureInvoiceTxs.length} parcelas / compras
-                    </span>
-                  </h3>
-                  {futureInvoiceTxs.length === 0 ? (
-                    <p className="text-sm text-slate-500 py-6 text-center italic border border-dashed border-slate-800/60 rounded-xl bg-slate-900/10">Nenhum lançamento futuro pendente.</p>
-                  ) : (
-                    <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/10 divide-y divide-slate-800 max-h-[220px] overflow-y-auto font-sans">
-                      {futureInvoiceTxs.map(t => {
-                        const dates = getTxInvoiceDates(t.dueDate || t.createdAt, viewingCardDetails.closingDay, viewingCardDetails.dueDay);
-                        return (
-                          <div key={t.id} className="p-3.5 flex justify-between items-center text-sm opacity-80 hover:opacity-100 transition-opacity group/item">
-                            <div>
-                              <p className="font-semibold text-slate-300">
-                                {t.description}
-                                <span className="text-[10px] text-slate-400 font-normal ml-2">
-                                  ({new Date(t.createdAt).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })})
-                                </span>
-                              </p>
-                              <p className="text-xs text-slate-500 mt-1">
-                                {t.category} • Vencimento: {dates.due} (Fechamento: {dates.closing})
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <span className="font-bold text-slate-300 text-sm">
-                                -{formatBRL(t.amount)}
                               </span>
                               <button
                                 onClick={() => {
