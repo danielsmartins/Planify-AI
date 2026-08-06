@@ -54,7 +54,7 @@ jobs:
         git add .quality-gate-baseline.json
         if ! git diff --staged --quiet; then
           git commit -m "chore(ci): update quality gate baseline [skip ci]"
-          git push
+          git push origin HEAD:${{ github.ref_name }}
         fi
 
     - name: Post Quality Gate PR Comment
