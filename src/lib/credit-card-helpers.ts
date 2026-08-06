@@ -1,6 +1,7 @@
 /**
- * Utilitários para cálculo de faturas de cartão de crédito
+ * Utilitários e helpers para cálculo, agrupamento e navegação de faturas de cartão de crédito
  */
+
 
 export function calculateCreditCardDate(baseDate: Date, closingDay: number, dueDay: number): Date {
   const resultDate = new Date(baseDate);
