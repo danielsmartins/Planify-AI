@@ -4,7 +4,7 @@ on:
   push:
     branches: [ "main", "develop" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "develop" ]
 
 permissions:
   contents: write
@@ -46,6 +46,12 @@ jobs:
           node scripts/quality-gate.js
         fi
 
+    - name: Post Quality Gate PR Comment
+      if: always() && github.event_name == 'pull_request'
+      uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        path: quality-gate-report.md
+
     - name: Commit and Push Updated Baseline
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
@@ -57,11 +63,6 @@ jobs:
           git push origin HEAD:${{ github.ref_name }}
         fi
 
-    - name: Post Quality Gate PR Comment
-      if: github.event_name == 'pull_request'
-      uses: marocchino/sticky-pull-request-comment@v2
-      with:
-        path: quality-gate-report.md
-
     - name: Build Project
       run: npm run build
+
