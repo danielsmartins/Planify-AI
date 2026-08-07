@@ -2,7 +2,7 @@ import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { db } from '@/db';
 import { transactions, categories, accounts, creditCards } from '@/db/schema';
-import { eq, desc, and, lte, sql } from 'drizzle-orm';
+import { eq, desc, and, sql } from 'drizzle-orm';
 import { TransactionRow, type TransactionType } from '@/components/dashboard/TransactionRow';
 import { TransactionFilters } from '@/components/transactions/TransactionFilters';
 import Link from 'next/link';
@@ -31,8 +31,6 @@ export default async function TransactionsPage({
   const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, session.user.id));
   const userCards = await db.select().from(creditCards).where(eq(creditCards.userId, session.user.id));
 
-  const now = new Date();
-
   // Buscar todos os pagamentos de fatura para saber quais faturas estão pagas
   const invoicePayments = await db.select()
     .from(transactions)
@@ -45,8 +43,7 @@ export default async function TransactionsPage({
   // Configurar condições de filtro
   const conditions = [
     eq(transactions.userId, session.user.id),
-    eq(transactions.status, 'confirmed'),
-    lte(transactions.createdAt, now)
+    eq(transactions.status, 'confirmed')
   ];
 
   if (monthStr !== 'all') {
