@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateCreditCardDate, getInvoiceDueDateForDate, getInvoiceKey, formatInvoiceMonthYear, getTxDueDate } from './credit-card-helpers';
+import { calculateCreditCardDate, getInvoiceDueDateForDate, getInvoiceKey, formatInvoiceMonthYear, getTxDueDate, getInvoiceDueDateFromKey } from './credit-card-helpers';
 
 describe('credit-card-helpers', () => {
   it('calculates transaction due date correctly when dueDay < closingDay', () => {
@@ -56,6 +56,18 @@ describe('credit-card-helpers', () => {
     expect(formatInvoiceMonthYear('2026-12')).toBe('Dezembro de 2026');
   });
 
+  it('calculates due date from invoice key YYYY-MM', () => {
+    const dueDateAug = getInvoiceDueDateFromKey('2026-08', 12);
+    expect(dueDateAug.getFullYear()).toBe(2026);
+    expect(dueDateAug.getMonth()).toBe(7); // Agosto
+    expect(dueDateAug.getDate()).toBe(12);
+
+    const dueDateFebShort = getInvoiceDueDateFromKey('2026-02', 31);
+    expect(dueDateFebShort.getFullYear()).toBe(2026);
+    expect(dueDateFebShort.getMonth()).toBe(1); // Fevereiro
+    expect(dueDateFebShort.getDate()).toBe(28); // Clamped to 28
+  });
+
   it('assigns purchase after closing day to the next invoice (e.g. July 18 purchase on Nubank closes Aug 5, due Aug 12)', () => {
     // Nubank: Fechamento dia 05, Vencimento dia 12
     // Compra em 18 de Julho (após 05/07) pertence à fatura que fecha em 05/08 e vence em 12/08 (Fatura de Agosto)
@@ -65,6 +77,13 @@ describe('credit-card-helpers', () => {
     expect(dueDate.getMonth()).toBe(7); // Agosto (index 7)
     expect(dueDate.getDate()).toBe(12);
     expect(getInvoiceKey(dueDate)).toBe('2026-08');
+
+    // Quando a transação já tem dueDate explícito
+    const txWithDueDate = { createdAt: '2026-07-18T12:00:00.000Z', dueDate: '2026-08-12T12:00:00.000Z' };
+    const explicitDueDate = getTxDueDate(txWithDueDate, 5, 12);
+    expect(explicitDueDate.getFullYear()).toBe(2026);
+    expect(explicitDueDate.getMonth()).toBe(7);
+    expect(explicitDueDate.getDate()).toBe(12);
   });
 });
 
