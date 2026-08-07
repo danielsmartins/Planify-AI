@@ -39,12 +39,15 @@ export async function POST() {
     const categoryTotals: Record<string, number> = {};
 
     userTransactions.forEach((tx) => {
-      const val = parseFloat(tx.amount);
-      if (tx.type === 'income') {
-        totalIncome += val;
-      } else {
-        totalExpense += val;
-        categoryTotals[tx.category] = (categoryTotals[tx.category] || 0) + val;
+      const isCardPayment = Boolean(tx.accountId && tx.creditCardId);
+      if (!isCardPayment) {
+        const val = parseFloat(tx.amount);
+        if (tx.type === 'income') {
+          totalIncome += val;
+        } else {
+          totalExpense += val;
+          categoryTotals[tx.category] = (categoryTotals[tx.category] || 0) + val;
+        }
       }
     });
 

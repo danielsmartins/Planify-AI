@@ -131,6 +131,8 @@ export function TransactionRow({
     )
   );
 
+  const isCardInvoicePayment = Boolean(accountId && creditCardId);
+
   if (layout === 'card') {
     return (
       <>
@@ -148,8 +150,8 @@ export function TransactionRow({
             </div>
 
             <div className="text-right shrink-0">
-              <span className={`font-bold text-sm sm:text-base ${type === 'income' ? 'text-emerald-400' : 'text-slate-100'}`}>
-                {type === 'income' ? '+' : '-'}{formattedAmount}
+              <span className={`font-bold text-sm sm:text-base ${isCardInvoicePayment ? 'text-slate-300' : type === 'income' ? 'text-emerald-400' : 'text-slate-100'}`}>
+                {isCardInvoicePayment ? '' : type === 'income' ? '+' : '-'}{formattedAmount}
               </span>
             </div>
           </div>
@@ -163,7 +165,11 @@ export function TransactionRow({
                 </span>
               ) : null}
 
-              {(isProjected || isPendingPayment) ? (
+              {isCardInvoicePayment ? (
+                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                  LIQUIDADO
+                </span>
+              ) : (isProjected || isPendingPayment) ? (
                 <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 border-dashed">
                   PREVISTO
                 </span>
@@ -230,7 +236,11 @@ export function TransactionRow({
           )}
         </td>
         <td className="py-3 px-4">
-          {(isProjected || isPendingPayment) ? (
+          {isCardInvoicePayment ? (
+            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              LIQUIDADO
+            </span>
+          ) : (isProjected || isPendingPayment) ? (
             <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 border-dashed">
               PREVISTO
             </span>
@@ -262,8 +272,8 @@ export function TransactionRow({
                 </button>
               </div>
             )}
-            <span className={type === 'income' ? 'text-emerald-400' : 'text-slate-100'}>
-              {type === 'income' ? '+' : '-'}{formattedAmount}
+            <span className={isCardInvoicePayment ? 'text-slate-300' : type === 'income' ? 'text-emerald-400' : 'text-slate-100'}>
+              {isCardInvoicePayment ? '' : type === 'income' ? '+' : '-'}{formattedAmount}
             </span>
           </div>
         </td>
