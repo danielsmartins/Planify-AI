@@ -5,7 +5,7 @@ import { deleteCreditCard, updateCreditCard, addCreditCard, payCreditCardInvoice
 import { deleteTransaction } from '@/app/actions';
 import { CreditCard, Trash2, Edit2, Plus, Calendar, X, Upload, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { getInvoiceDueDateForDate, getInvoiceKey, formatInvoiceMonthYear, getTxDueDate } from '@/lib/credit-card-helpers';
+import { getInvoiceDueDateForDate, getInvoiceKey, formatInvoiceMonthYear, getTxDueDate, getInvoiceDueDateFromKey } from '@/lib/credit-card-helpers';
 
 
 
@@ -18,6 +18,7 @@ interface CardProps {
   limitAmount: string | null;
   brand: string;
   invoiceAmount?: string;
+  activeInvoiceKey?: string;
   autoPay?: boolean;
   autoPayAccountId?: string | null;
 }
@@ -364,10 +365,11 @@ export function CardClient({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        const defaultDueDate = getInvoiceDueDateForDate(now, Number(card.closingDay), Number(card.dueDay));
+                        const targetKey = card.activeInvoiceKey || getInvoiceKey(getInvoiceDueDateForDate(now, Number(card.closingDay), Number(card.dueDay)));
+                        const targetDueDate = getInvoiceDueDateFromKey(targetKey, Number(card.dueDay));
                         setPayingCard(card);
                         setPayAmount(card.invoiceAmount!);
-                        setPayTargetDueDate(defaultDueDate.toISOString());
+                        setPayTargetDueDate(targetDueDate.toISOString());
                         if (accounts.length > 0) setPayAccountId(accounts[0].id);
                       }}
                       className="bg-white hover:bg-white/90 text-black px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md select-none z-10"
