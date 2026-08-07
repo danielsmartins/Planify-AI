@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage --coverage.all",
     "quality-gate": "node scripts/quality-gate.js",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"
