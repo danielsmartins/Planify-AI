@@ -7,6 +7,8 @@ import { TransactionRow, type TransactionType } from '@/components/dashboard/Tra
 import { TransactionFilters } from '@/components/transactions/TransactionFilters';
 import Link from 'next/link';
 
+import { getTxDueDate, getInvoiceKey } from '@/lib/credit-card-helpers';
+
 export default async function TransactionsPage({
   searchParams,
 }: {
@@ -79,12 +81,17 @@ export default async function TransactionsPage({
   const paginatedTransactionsWithStatus = paginatedTransactions.map(tx => {
     let isPendingPayment = false;
     if (tx.type === 'expense' && tx.creditCardId && !tx.accountId) {
-      const txDueDate = new Date(tx.dueDate || tx.createdAt);
-      const hasPayment = invoicePayments.some(p => 
-        p.creditCardId === tx.creditCardId && 
-        new Date(p.createdAt).getMonth() === txDueDate.getMonth() && 
-        new Date(p.createdAt).getFullYear() === txDueDate.getFullYear()
-      );
+      const card = userCards.find(c => c.id === tx.creditCardId);
+      const closingDay = card ? Number(card.closingDay) : 25;
+      const dueDay = card ? Number(card.dueDay) : 5;
+      const txDueDate = getTxDueDate(tx, closingDay, dueDay);
+      const txKey = getInvoiceKey(txDueDate);
+
+      const hasPayment = invoicePayments.some(p => {
+        if (p.creditCardId !== tx.creditCardId) return false;
+        const pDueDate = getTxDueDate(p, closingDay, dueDay);
+        return getInvoiceKey(pDueDate) === txKey;
+      });
       isPendingPayment = !hasPayment;
     }
     return { ...tx, isPendingPayment };
