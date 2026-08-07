@@ -18,23 +18,22 @@ describe('credit-card-helpers', () => {
   });
 
   it('calculates current active invoice due date on today date', () => {
-    // Se hoje é 06/08, fechamento 25, vencimento 05:
-    // A fatura que fechou dia 25/07 tinha vencimento dia 05/08.
-    // Como hoje é 06/08 (< 25), o mês mais recente de fechamento é Julho (25/07), vencimento 05/08.
-    const todayAug6 = new Date(2026, 7, 6);
-    const activeInvoiceDue = getInvoiceDueDateForDate(todayAug6, 25, 5);
+    // Se hoje é 04/08, fechamento 25, vencimento 05:
+    // A fatura que vence dia 05/08 ainda não venceu, então a fatura atual é 05/08.
+    const todayAug4 = new Date(2026, 7, 4);
+    const activeInvoiceDue = getInvoiceDueDateForDate(todayAug4, 25, 5);
     expect(activeInvoiceDue.getFullYear()).toBe(2026);
     expect(activeInvoiceDue.getMonth()).toBe(7); // Agosto
     expect(activeInvoiceDue.getDate()).toBe(5);
     expect(getInvoiceKey(activeInvoiceDue)).toBe('2026-08');
 
-    // Se hoje é 26/08 (>= 25), a fatura que fechou dia 25/08 vence dia 05/09.
-    const todayAug26 = new Date(2026, 7, 26);
-    const activeInvoiceDueAug26 = getInvoiceDueDateForDate(todayAug26, 25, 5);
-    expect(activeInvoiceDueAug26.getFullYear()).toBe(2026);
-    expect(activeInvoiceDueAug26.getMonth()).toBe(8); // Setembro
-    expect(activeInvoiceDueAug26.getDate()).toBe(5);
-    expect(getInvoiceKey(activeInvoiceDueAug26)).toBe('2026-09');
+    // Se hoje é 06/08 (> 05/08), a fatura de 05/08 já venceu ontem, então a fatura atual a vencer passa a ser 05/09.
+    const todayAug6 = new Date(2026, 7, 6);
+    const activeInvoiceDueAug6 = getInvoiceDueDateForDate(todayAug6, 25, 5);
+    expect(activeInvoiceDueAug6.getFullYear()).toBe(2026);
+    expect(activeInvoiceDueAug6.getMonth()).toBe(8); // Setembro
+    expect(activeInvoiceDueAug6.getDate()).toBe(5);
+    expect(getInvoiceKey(activeInvoiceDueAug6)).toBe('2026-09');
   });
 
   it('calculates due date when dueDay > closingDay', () => {

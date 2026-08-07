@@ -26,7 +26,10 @@ export async function GET() {
         sql`${transactions.createdAt} <= ${endOfMonth}`
       ));
 
-    if (userTxs.length === 0) {
+    // Filtrar liquidações de fatura de cartão para não duplicar despesas na análise da IA
+    const filteredTxs = userTxs.filter(tx => !(tx.accountId && tx.creditCardId));
+
+    if (filteredTxs.length === 0) {
       return NextResponse.json({ 
         report: "Você ainda não possui transações neste mês para gerar um relatório inteligente." 
       });
@@ -39,7 +42,7 @@ Você é o "Planify AI", um consultor financeiro de alto nível.
 Analise as transações deste mês do usuário (fornecidas no JSON abaixo) e escreva um relatório gerencial em português.
 
 Transações do mês:
-${JSON.stringify(userTxs)}
+${JSON.stringify(filteredTxs)}
 
 Instruções para o relatório:
 1. Resuma como está o balanço do mês (gastou mais que ganhou?).

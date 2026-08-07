@@ -97,12 +97,19 @@ export async function updateCreditCard(id: string, formData: FormData) {
   return { success: true };
 }
 
-export async function payCreditCardInvoice(cardId: string, accountId: string, amount: number, dateStr: string) {
+export async function payCreditCardInvoice(
+  cardId: string, 
+  accountId: string, 
+  amount: number, 
+  dateStr: string,
+  targetDueDateStr?: string
+) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
   const parsedAmount = parseFloat(amount.toString());
   const txDate = new Date(dateStr);
+  const dueDate = targetDueDateStr ? new Date(targetDueDateStr) : txDate;
 
   // Descontar do saldo da conta
   const accRes = await db.select().from(accounts).where(and(eq(accounts.id, accountId), eq(accounts.userId, session.user.id)));
@@ -125,7 +132,8 @@ export async function payCreditCardInvoice(cardId: string, accountId: string, am
     type: 'expense',
     creditCardId: cardId,
     accountId: accountId,
-    createdAt: txDate
+    createdAt: txDate,
+    dueDate: dueDate
   });
 
   revalidatePath('/cards');

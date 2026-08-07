@@ -5,7 +5,7 @@ import { deleteCreditCard, updateCreditCard, addCreditCard, payCreditCardInvoice
 import { deleteTransaction } from '@/app/actions';
 import { CreditCard, Trash2, Edit2, Plus, Calendar, X, Upload, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { getInvoiceDueDateForDate, getInvoiceKey, formatInvoiceMonthYear, getTxDueDate } from '@/lib/credit-card-helpers';
+import { getInvoiceDueDateForDate, getInvoiceKey, formatInvoiceMonthYear, getTxDueDate, getInvoiceDueDateFromKey } from '@/lib/credit-card-helpers';
 
 
 
@@ -18,6 +18,7 @@ interface CardProps {
   limitAmount: string | null;
   brand: string;
   invoiceAmount?: string;
+  activeInvoiceKey?: string;
   autoPay?: boolean;
   autoPayAccountId?: string | null;
 }
@@ -93,6 +94,7 @@ export function CardClient({
   const [payAmount, setPayAmount] = useState('');
   const [payAccountId, setPayAccountId] = useState('');
   const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0]);
+  const [payTargetDueDate, setPayTargetDueDate] = useState<string | undefined>(undefined);
 
   const [formName, setFormName] = useState('');
   const [formColor, setFormColor] = useState('#10b981');
@@ -113,10 +115,17 @@ export function CardClient({
     if (!payingCard || !payAccountId || !payAmount) return;
 
     startTransition(() => {
-      payCreditCardInvoice(payingCard.id, payAccountId, parseFloat(payAmount), payDate).then(() => {
+      payCreditCardInvoice(
+        payingCard.id, 
+        payAccountId, 
+        parseFloat(payAmount), 
+        payDate,
+        payTargetDueDate
+      ).then(() => {
         setPayingCard(null);
         setPayAmount('');
         setPayAccountId('');
+        setPayTargetDueDate(undefined);
         router.refresh();
       });
     });
@@ -356,8 +365,11 @@ export function CardClient({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        const targetKey = card.activeInvoiceKey || getInvoiceKey(getInvoiceDueDateForDate(now, Number(card.closingDay), Number(card.dueDay)));
+                        const targetDueDate = getInvoiceDueDateFromKey(targetKey, Number(card.dueDay));
                         setPayingCard(card);
                         setPayAmount(card.invoiceAmount!);
+                        setPayTargetDueDate(targetDueDate.toISOString());
                         if (accounts.length > 0) setPayAccountId(accounts[0].id);
                       }}
                       className="bg-white hover:bg-white/90 text-black px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md select-none z-10"
@@ -596,7 +608,7 @@ export function CardClient({
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md relative animate-in fade-in zoom-in duration-200">
             <button 
-              onClick={() => { setPayingCard(null); setPayAmount(''); setPayAccountId(''); }} 
+              onClick={() => { setPayingCard(null); setPayAmount(''); setPayAccountId(''); setPayTargetDueDate(undefined); }} 
               className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
             >
               <X size={20}/>
@@ -826,7 +838,8 @@ export function CardClient({
                       onClick={() => {
                         setPayingCard(viewingCardDetails);
                         setPayAmount(outstandingBalance.toString());
-                        setPayDate(invoiceDueDate.toISOString().split('T')[0]);
+                        setPayDate(new Date().toISOString().split('T')[0]);
+                        setPayTargetDueDate(invoiceDueDate.toISOString());
                         if (accounts.length > 0) setPayAccountId(accounts[0].id);
                         setViewingCardDetails(null);
                       }}
