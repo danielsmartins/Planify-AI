@@ -52,6 +52,9 @@ export default async function AnalyticsPage() {
   const currentMonthCategoryTotals: Record<string, number> = {};
 
   userTxs.forEach(tx => {
+    const isCardPayment = Boolean(tx.accountId && tx.creditCardId) || tx.category === 'Pagamento de Fatura';
+    if (isCardPayment) return;
+
     const d = new Date(tx.createdAt);
     // Ex: "06/2026"
     const monthKey = `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;

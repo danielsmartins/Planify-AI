@@ -210,7 +210,7 @@ export default async function Home({
   // 1. Receitas e Despesas do mês
   monthTransactions.forEach((tx) => {
     const val = parseFloat(tx.amount);
-    const isCardPayment = tx.accountId && tx.creditCardId;
+    const isCardPayment = Boolean(tx.accountId && tx.creditCardId) || tx.category === 'Pagamento de Fatura';
     if (!isCardPayment) {
       if (tx.type === 'income' && tx.status === 'confirmed') {
         totalIncome += val;
