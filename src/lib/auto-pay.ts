@@ -85,7 +85,8 @@ export async function processAutoPayments(userId: string) {
               card.id,
               card.autoPayAccountId,
               totalPurchases,
-              dueDate.toISOString().split('T')[0]
+              dueDate.toISOString().split('T')[0],
+              dueDate.toISOString()
             );
           }
         }
