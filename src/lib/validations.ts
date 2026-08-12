@@ -32,7 +32,7 @@ export const profileSchema = z.object({
 export const transactionSchema = z.object({
   amount: z.coerce.number().positive('O valor deve ser maior que zero.'),
   description: z.string().trim().min(1, 'A descrição é obrigatória.').max(200),
-  category: z.string().trim().min(1, 'A categoria é obrigatória.'),
+  category: z.union([z.string().trim(), z.null(), z.literal('')]).optional().transform(val => val || 'Receita'),
   type: z.enum(['income', 'expense']),
   status: z.enum(['pending', 'confirmed']).default('confirmed'),
   accountId: uuidOrNull,

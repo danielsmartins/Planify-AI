@@ -8,7 +8,6 @@ import { ActionButtons } from '@/components/dashboard/ActionButtons';
 import { ExpensesChart } from '@/components/dashboard/ExpensesChart';
 import { AiAdvisor } from '@/components/dashboard/AiAdvisor';
 import { LandingPage } from '@/components/layout/LandingPage';
-import { NetWorthChart } from '@/components/dashboard/NetWorthChart';
 import { processAutoPayments } from '@/lib/auto-pay';
 import { processPendingSubscriptions } from '@/lib/subscriptions-billing';
 import { getTxDueDate, getInvoiceKey } from '@/lib/credit-card-helpers';
@@ -249,91 +248,7 @@ export default async function Home({
 
   const formatBRL = (val: number) => `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  // Obter dinamicamente os últimos 6 meses terminando no mês atual (para o NetWorthChart)
-  const monthsData = [];
-  const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    monthsData.push({
-      name: monthNames[d.getMonth()],
-      year: d.getFullYear(),
-      monthIndex: d.getMonth(),
-    });
-  }
 
-  // Transações a serem consideradas para o histórico do gráfico de patrimônio
-  const allConfirmedTransactions = allUserTransactions.filter(tx => tx.status === 'confirmed');
-  const historyUserTransactions = planned ? allUserTransactions : allConfirmedTransactions;
-
-  // Calcular dívida do cartão de crédito (despesas confirmadas no crédito)
-  let creditCardDebt = 0;
-  allConfirmedTransactions.forEach(tx => {
-    const txDate = new Date(tx.createdAt);
-    if (txDate <= endOfMonth && tx.type === 'expense' && tx.creditCardId && !tx.accountId) {
-      creditCardDebt += parseFloat(tx.amount);
-    }
-  });
-
-  const hasAccounts = userAccounts.length > 0;
-  let currentBalance = hasAccounts ? (totalBalance - creditCardDebt) : 0;
-  if (!hasAccounts) {
-    historyUserTransactions.forEach(tx => {
-      const txDate = new Date(tx.createdAt);
-      if (txDate <= endOfMonth) {
-        const val = parseFloat(tx.amount);
-        const isCardPayment = tx.accountId && tx.creditCardId;
-        if (!isCardPayment) {
-          if (tx.type === 'income') {
-            currentBalance += val;
-          } else {
-            currentBalance -= val;
-          }
-        }
-      }
-    });
-  }
-
-  // Reconstruir o histórico de saldo regredindo mês a mês com base nos dados reais
-  const historyData = monthsData.map((mInfo) => {
-    const endOfMonthLimit = new Date(mInfo.year, mInfo.monthIndex + 1, 0, 23, 59, 59, 999);
-    
-    if (endOfMonthLimit >= endOfMonth) {
-      return {
-        month: mInfo.name,
-        valor: Math.round(currentBalance)
-      };
-    }
-    
-    let historicalBalance = currentBalance;
-    historyUserTransactions.forEach((tx) => {
-      const txDate = new Date(tx.createdAt);
-      if (txDate > endOfMonthLimit && txDate <= endOfMonth) {
-        const val = parseFloat(tx.amount);
-        const isCardPayment = tx.accountId && tx.creditCardId;
-        if (!isCardPayment) {
-          if (tx.type === 'income') {
-            historicalBalance -= val;
-          } else {
-            historicalBalance += val;
-          }
-        }
-      }
-    });
-
-    if (planned) {
-      allProjectedTxs.forEach((tx) => {
-        const txDate = new Date(tx.createdAt);
-        if (txDate > endOfMonthLimit && txDate <= endOfMonth) {
-          historicalBalance += parseFloat(tx.amount);
-        }
-      });
-    }
-
-    return {
-      month: mInfo.name,
-      valor: Math.round(historicalBalance)
-    };
-  });
 
   // Agrupar despesas por categoria
   const categoryTotals: Record<string, number> = {};
@@ -410,69 +325,63 @@ export default async function Home({
         </div>
       </div>
 
-      {/* Top Grid (Saldo Total + NetWorthChart) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <div>
-          <div className="glass-panel p-6 rounded-2xl flex flex-col justify-between h-full min-h-[220px]">
+      {/* Top Section (Saldo Total) */}
+      <div className="mb-8">
+        <div className="glass-panel p-6 rounded-2xl flex flex-col justify-between h-full min-h-[200px]">
+          <div>
+            <span className="text-xs text-neutral-500 font-semibold uppercase tracking-wider block mb-1">Saldo Total</span>
+            <div className="flex items-baseline gap-3 mb-2">
+              <h2 className="text-3xl font-bold tracking-tight text-white">{formatBRL(totalBalance)}</h2>
+              <span className="text-xs font-semibold text-emerald-400 flex items-center gap-0.5">
+                <span>↗</span> +3.2% vs mês ant.
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-500">Saldo consolidado de todas as suas contas bancárias</p>
+          </div>
+
+          <div className="border-t border-neutral-900/60 pt-4 mt-6 grid grid-cols-3 gap-2 sm:gap-4">
             <div>
-              <span className="text-xs text-neutral-500 font-semibold uppercase tracking-wider block mb-1">Saldo Total</span>
-              <div className="flex items-baseline gap-3 mb-2">
-                <h2 className="text-3xl font-bold tracking-tight text-white">{formatBRL(totalBalance)}</h2>
-                <span className="text-xs font-semibold text-emerald-400 flex items-center gap-0.5">
-                  <span>↗</span> +3.2% vs mês ant.
-                </span>
+              <span className="text-[10px] text-neutral-500 font-semibold block mb-0.5">Receitas</span>
+              <span className="text-sm sm:text-base font-bold text-white">{formatBRL(totalIncome)}</span>
+            </div>
+            <div className="group relative">
+              <div className="flex items-center gap-1 mb-0.5 cursor-help">
+                <span className="text-[10px] text-neutral-500 font-semibold uppercase tracking-wider">Despesas</span>
+                <HelpCircle size={11} className="text-neutral-500 group-hover:text-neutral-300 transition-colors" />
               </div>
-              <p className="text-[10px] text-slate-500">Saldo consolidado de todas as suas contas bancárias</p>
+              <span className="text-sm sm:text-base font-bold text-white">{formatBRL(totalExpense)}</span>
+              
+              {/* Tooltip ao passar o mouse */}
+              <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 w-56 p-3 bg-neutral-950 border border-neutral-800 text-neutral-300 text-[11px] rounded-xl shadow-2xl backdrop-blur-md pointer-events-none transition-all duration-200">
+                <p className="font-semibold text-white mb-1 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                  Total de Despesas
+                </p>
+                <p className="text-neutral-400 leading-normal">
+                  Soma de <strong className="text-neutral-200">todas as despesas</strong> do mês (inclui despesas já pagas, pendentes e projetadas).
+                </p>
+              </div>
             </div>
 
-            <div className="border-t border-neutral-900/60 pt-4 mt-6 grid grid-cols-3 gap-2 sm:gap-4">
-              <div>
-                <span className="text-[10px] text-neutral-500 font-semibold block mb-0.5">Receitas</span>
-                <span className="text-sm sm:text-base font-bold text-white">{formatBRL(totalIncome)}</span>
+            <div className="group relative">
+              <div className="flex items-center gap-1 mb-0.5 cursor-help">
+                <span className="text-[10px] text-neutral-500 font-semibold uppercase tracking-wider">Desp. Planejadas</span>
+                <HelpCircle size={11} className="text-violet-400/70 group-hover:text-violet-300 transition-colors" />
               </div>
-              <div className="group relative">
-                <div className="flex items-center gap-1 mb-0.5 cursor-help">
-                  <span className="text-[10px] text-neutral-500 font-semibold uppercase tracking-wider">Despesas</span>
-                  <HelpCircle size={11} className="text-neutral-500 group-hover:text-neutral-300 transition-colors" />
-                </div>
-                <span className="text-sm sm:text-base font-bold text-white">{formatBRL(totalExpense)}</span>
-                
-                {/* Tooltip ao passar o mouse */}
-                <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 w-56 p-3 bg-neutral-950 border border-neutral-800 text-neutral-300 text-[11px] rounded-xl shadow-2xl backdrop-blur-md pointer-events-none transition-all duration-200">
-                  <p className="font-semibold text-white mb-1 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                    Total de Despesas
-                  </p>
-                  <p className="text-neutral-400 leading-normal">
-                    Soma de <strong className="text-neutral-200">todas as despesas</strong> do mês (inclui despesas já pagas, pendentes e projetadas).
-                  </p>
-                </div>
-              </div>
-
-              <div className="group relative">
-                <div className="flex items-center gap-1 mb-0.5 cursor-help">
-                  <span className="text-[10px] text-neutral-500 font-semibold uppercase tracking-wider">Desp. Planejadas</span>
-                  <HelpCircle size={11} className="text-violet-400/70 group-hover:text-violet-300 transition-colors" />
-                </div>
-                <span className="text-sm sm:text-base font-bold text-violet-400">{formatBRL(plannedExpense)}</span>
-                
-                {/* Tooltip ao passar o mouse */}
-                <div className="absolute right-0 sm:left-0 bottom-full mb-2 hidden group-hover:block z-50 w-60 p-3 bg-neutral-950 border border-neutral-800 text-neutral-300 text-[11px] rounded-xl shadow-2xl backdrop-blur-md pointer-events-none transition-all duration-200">
-                  <p className="font-semibold text-violet-300 mb-1 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-violet-400"></span>
-                    Despesas Planejadas (A Pagar)
-                  </p>
-                  <p className="text-neutral-400 leading-normal">
-                    Soma apenas das despesas que <strong className="text-white font-medium">ainda não foram pagas</strong> (inclui lançamentos pendentes e assinaturas projetadas).
-                  </p>
-                </div>
+              <span className="text-sm sm:text-base font-bold text-violet-400">{formatBRL(plannedExpense)}</span>
+              
+              {/* Tooltip ao passar o mouse */}
+              <div className="absolute right-0 sm:left-0 bottom-full mb-2 hidden group-hover:block z-50 w-60 p-3 bg-neutral-950 border border-neutral-800 text-neutral-300 text-[11px] rounded-xl shadow-2xl backdrop-blur-md pointer-events-none transition-all duration-200">
+                <p className="font-semibold text-violet-300 mb-1 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-violet-400"></span>
+                  Despesas Planejadas (A Pagar)
+                </p>
+                <p className="text-neutral-400 leading-normal">
+                  Soma apenas das despesas que <strong className="text-white font-medium">ainda não foram pagas</strong> (inclui lançamentos pendentes e assinaturas projetadas).
+                </p>
               </div>
             </div>
           </div>
-        </div>
-
-        <div>
-          <NetWorthChart history={historyData} />
         </div>
       </div>
 
