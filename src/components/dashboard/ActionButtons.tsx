@@ -134,6 +134,9 @@ export function ActionButtons({
     }
     
     const targetType = type === 'ai' ? (aiParsedData?.type || 'expense') : type;
+    if (targetType === 'income' && !formData.get('category')) {
+      formData.set('category', 'Receita');
+    }
 
     if (targetType === 'expense' && isInstallment) {
       const res = await createInstallmentPurchase(formData);
@@ -361,23 +364,25 @@ export function ActionButtons({
                   />
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-sm text-slate-300">Categoria</label>
-                    <Link href="/categories" className="text-xs text-brand hover:underline" onClick={resetState}>Criar nova</Link>
+                {aiParsedData.type !== 'income' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm text-slate-300">Categoria</label>
+                      <Link href="/categories" className="text-xs text-brand hover:underline" onClick={resetState}>Criar nova</Link>
+                    </div>
+                    <select 
+                      required 
+                      name="category" 
+                      defaultValue={aiParsedData.category}
+                      className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors text-sm"
+                    >
+                      <option value={aiParsedData.category}>{aiParsedData.category}</option>
+                      {categories.filter(c => c.name !== aiParsedData.category).map(c => (
+                        <option key={c.id} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
                   </div>
-                  <select 
-                    required 
-                    name="category" 
-                    defaultValue={aiParsedData.category}
-                    className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors text-sm"
-                  >
-                    <option value={aiParsedData.category}>{aiParsedData.category}</option>
-                    {categories.filter(c => c.name !== aiParsedData.category).map(c => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
+                )}
 
                 {/* Forma de Pagamento / Seleção de Conta Manual (O MAIS IMPORTANTE) */}
                 <div>
@@ -475,21 +480,23 @@ export function ActionButtons({
                   <input required name="amount" type="number" step="0.01" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder="0.00" />
                 </div>
                 
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-sm text-slate-300">Categoria</label>
-                    <Link href="/categories" className="text-xs text-brand hover:underline" onClick={resetState}>Criar nova</Link>
+                {type === 'expense' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm text-slate-300">Categoria</label>
+                      <Link href="/categories" className="text-xs text-brand hover:underline" onClick={resetState}>Criar nova</Link>
+                    </div>
+                    {categories.length > 0 ? (
+                      <select required name="category" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors">
+                        {categories.map(c => (
+                          <option key={c.id} value={c.name}>{c.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input required name="category" type="text" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder="Ex: Serviços" />
+                    )}
                   </div>
-                  {categories.length > 0 ? (
-                    <select required name="category" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors">
-                      {categories.map(c => (
-                        <option key={c.id} value={c.name}>{c.name}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input required name="category" type="text" className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors" placeholder="Ex: Serviços" />
-                  )}
-                </div>
+                )}
 
                 {type === 'expense' && (
                   <div>
