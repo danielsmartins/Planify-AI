@@ -37,14 +37,12 @@ export function InstallmentClient({
   const [addError, setAddError] = useState('');
   const [showFinished, setShowFinished] = useState(false);
 
-  const handleDelete = (id: string, keepTransactions: boolean = true) => {
-    const message = keepTransactions
-      ? 'Deseja remover este parcelamento da lista? O histórico de transações passadas continuará gravado em seus relatórios.'
-      : 'Deseja excluir este parcelamento? Suas transações no histórico serão desvinculadas e mantidas.';
+  const handleDelete = (id: string) => {
+    const message = 'Deseja excluir este parcelamento? As parcelas futuras e previstas serão excluídas, e o histórico de parcelas já quitadas será preservado.';
 
     if (confirm(message)) {
       startTransition(() => {
-        deleteInstallment(id, keepTransactions);
+        deleteInstallment(id);
       });
     }
   };
@@ -182,7 +180,7 @@ export function InstallmentClient({
                         <Edit2 size={16} />
                       </button>
                       <button 
-                        onClick={() => handleDelete(inst.id, true)}
+                        onClick={() => handleDelete(inst.id)}
                         disabled={isPending}
                         className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors rounded-lg disabled:opacity-50 cursor-pointer"
                         title="Excluir"
@@ -267,7 +265,7 @@ export function InstallmentClient({
                         
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all focus-within:opacity-100">
                           <button 
-                            onClick={() => handleDelete(inst.id, true)}
+                            onClick={() => handleDelete(inst.id)}
                             disabled={isPending}
                             className="p-1.5 text-neutral-500 hover:text-rose-400 transition-colors rounded-lg disabled:opacity-50 cursor-pointer"
                             title="Excluir parcelamento encerrado (mantém histórico)"
