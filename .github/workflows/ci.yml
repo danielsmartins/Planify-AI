@@ -51,7 +51,7 @@ jobs:
         fi
 
     - name: Post Quality Gate PR Comment
-      if: always() && github.event_name == 'pull_request'
+      if: always() && github.event_name == 'pull_request' && hashFiles('quality-gate-report.md') != ''
       uses: marocchino/sticky-pull-request-comment@v2
       with:
         path: quality-gate-report.md

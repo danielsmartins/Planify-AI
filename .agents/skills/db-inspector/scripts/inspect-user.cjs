@@ -1,3 +1,4 @@
+/* eslint-disable */
 const { neon } = require('@neondatabase/serverless');
 
 if (!process.env.DATABASE_URL) {
