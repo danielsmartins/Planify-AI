@@ -12,6 +12,7 @@ Antes de criar, modificar ou refatorar qualquer parte do código, você **DEVE**
    - Leia o arquivo [.agents/rules/frontend.md](file:///c:/Users/Daniel/Documents/antigravity/Planify%20AI/.agents/rules/frontend.md) antes de criar ou modificar páginas (`src/app`), componentes de tela, estilos (Tailwind CSS) ou implementar o Linear/Shadcn style design system.
 2. **Persistência & Queries (Banco de Dados & ORM)**:
    - Leia o arquivo [.agents/rules/database.md](file:///c:/Users/Daniel/Documents/antigravity/Planify%20AI/.agents/rules/database.md) antes de interagir com tabelas do banco de dados, modificar schemas (`src/db/schema.ts`) ou escrever consultas com o Drizzle ORM.
+   - Utilize a skill [.agents/skills/db-inspector/SKILL.md](file:///c:/Users/Daniel/Documents/antigravity/Planify%20AI/.agents/skills/db-inspector/SKILL.md) sempre que precisar inspecionar dados reais, auditar divergências de cálculo ou rodar queries SQL de diagnóstico.
 3. **Qualidade & Regras de Negócio (Testes Automatizados)**:
    - Leia o arquivo [.agents/rules/testing.md](file:///c:/Users/Daniel/Documents/antigravity/Planify%20AI/.agents/rules/testing.md) quando estiver desenvolvendo novas regras de negócio críticas, lógica de parsing de mensagens financeiras ou escrevendo testes unitários.
 
