@@ -220,12 +220,17 @@ export default async function Home({
         // Despesas planejadas incluem SOMENTE as despesas que ainda NÃO foram pagas
         let isUnpaid = tx.status === 'pending';
         if (tx.creditCardId && !tx.accountId) {
-          const txDueDate = new Date(tx.dueDate || tx.createdAt);
-          const hasPayment = invoicePayments.some(p => 
-            p.creditCardId === tx.creditCardId && 
-            new Date(p.createdAt).getMonth() === txDueDate.getMonth() && 
-            new Date(p.createdAt).getFullYear() === txDueDate.getFullYear()
-          );
+          const card = userCards.find(c => c.id === tx.creditCardId);
+          const closingDay = card ? Number(card.closingDay) : 25;
+          const dueDay = card ? Number(card.dueDay) : 5;
+          const txDueDate = getTxDueDate(tx, closingDay, dueDay);
+          const txKey = getInvoiceKey(txDueDate);
+
+          const hasPayment = invoicePayments.some(p => {
+            if (p.creditCardId !== tx.creditCardId) return false;
+            const pDueDate = getTxDueDate(p, closingDay, dueDay);
+            return getInvoiceKey(pDueDate) === txKey;
+          });
           isUnpaid = !hasPayment;
         }
 

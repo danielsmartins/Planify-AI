@@ -7,6 +7,7 @@ import { extractFinancialData, extractInvoiceTransactions } from "@/lib/gemini";
 import { sendTelegramMessage, answerCallbackQuery } from "@/lib/telegram";
 import { getPaymentMethodSuggestion } from "@/lib/telegram-utils";
 import { rateLimit } from "@/lib/rate-limit";
+import { calculateCreditCardDate } from "@/lib/credit-card-helpers";
 
 // Polyfill DOMMatrix for Node.js environments (used by pdfjs-dist inside pdf-parse)
 if (typeof global !== 'undefined' && !('DOMMatrix' in global)) {
@@ -165,10 +166,12 @@ export async function POST(req: NextRequest) {
               const index = parseInt(typeAndIndex.substring(1));
               const card = userCards[index];
               if (card) {
+                const txDueDate = calculateCreditCardDate(new Date(tx.createdAt), Number(card.closingDay), Number(card.dueDay));
                 await db.update(transactions).set({ 
                   status: 'confirmed', 
                   creditCardId: card.id, 
-                  accountId: null 
+                  accountId: null,
+                  dueDate: txDueDate
                 }).where(eq(transactions.id, txId));
                 await sendTelegramMessage(chatId, `✅ Transação confirmada no cartão *${card.name}* com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`);
               } else {

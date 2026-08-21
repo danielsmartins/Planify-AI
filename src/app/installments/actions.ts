@@ -4,32 +4,66 @@ import { db } from '@/db';
 import { installments, transactions, creditCards } from '@/db/schema';
 import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import { calculateCreditCardDate } from '@/app/actions';
 import { updateInstallmentSchema } from '@/lib/validations';
+import { isTransactionPaid } from '@/lib/installments';
 
-export async function deleteInstallment(id: string, keepTransactions: boolean = true) {
+export async function deleteInstallment(id: string) {
   const session = await getSession();
   if (!session) return { error: 'Não autorizado' };
 
-  if (keepTransactions) {
-    // Preserva o histórico financeiro desvinculando o installmentId das transações existentes
-    await db.update(transactions)
-      .set({ installmentId: null })
-      .where(
+  // Buscar todas as transações associadas a este parcelamento
+  const relatedTxs = await db.select().from(transactions).where(
+    and(
+      eq(transactions.installmentId, id),
+      eq(transactions.userId, session.user.id)
+    )
+  );
+
+  if (relatedTxs.length > 0) {
+    // Buscar pagamentos de fatura confirmados do usuário para verificar quitações de faturas de cartão
+    const invoicePayments = await db.select().from(transactions).where(
+      and(
+        eq(transactions.userId, session.user.id),
+        eq(transactions.status, 'confirmed'),
+        sql`account_id IS NOT NULL AND credit_card_id IS NOT NULL`
+      )
+    );
+
+    const now = new Date();
+    const paidTxIds: string[] = [];
+    const pendingTxIds: string[] = [];
+
+    for (const tx of relatedTxs) {
+      if (isTransactionPaid(tx, invoicePayments, now)) {
+        paidTxIds.push(tx.id);
+      } else {
+        pendingTxIds.push(tx.id);
+      }
+    }
+
+    // Exclui as parcelas que ainda estão previstas / não quitadas
+    if (pendingTxIds.length > 0) {
+      await db.delete(transactions).where(
         and(
-          eq(transactions.installmentId, id),
+          inArray(transactions.id, pendingTxIds),
           eq(transactions.userId, session.user.id)
         )
       );
-  } else {
-    // Remove todas as transações vinculadas a este installment
-    await db.delete(transactions).where(
-      and(
-        eq(transactions.installmentId, id),
-        eq(transactions.userId, session.user.id)
-      )
-    );
+    }
+
+    // Desvincula as parcelas já quitadas para preservar o histórico financeiro
+    if (paidTxIds.length > 0) {
+      await db.update(transactions)
+        .set({ installmentId: null })
+        .where(
+          and(
+            inArray(transactions.id, paidTxIds),
+            eq(transactions.userId, session.user.id)
+          )
+        );
+    }
   }
 
   // Depois deleta o installment master
@@ -42,6 +76,8 @@ export async function deleteInstallment(id: string, keepTransactions: boolean = 
 
   revalidatePath('/installments');
   revalidatePath('/');
+  revalidatePath('/transactions');
+  revalidatePath('/cards');
   return { success: true };
 }
 
