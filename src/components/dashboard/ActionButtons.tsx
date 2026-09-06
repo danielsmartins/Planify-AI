@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Receipt, X, Sparkles, ArrowLeft } from 'lucide-react';
 import { createTransaction, createInstallmentPurchase, parseTransactionViaAI } from '@/app/actions';
+import type { ExtractedData } from '@/lib/gemini';
 import Link from 'next/link';
 
 interface CategoryProps {
@@ -18,17 +19,6 @@ interface CreditCardProps {
 interface AccountProps {
   id: string;
   name: string;
-}
-
-interface ExtractedData {
-  amount: number;
-  description: string;
-  category: string;
-  type: 'income' | 'expense';
-  isInstallment?: boolean;
-  installmentsCount?: number;
-  currentInstallment?: number;
-  paymentMethodSuggestion?: string;
 }
 
 export function ActionButtons({ 
@@ -357,7 +347,7 @@ export function ActionButtons({
                   <input 
                     required 
                     name="amount" 
-                    defaultValue={aiParsedData.amount} 
+                    defaultValue={aiParsedData.amount ?? ''} 
                     type="number" 
                     step="0.01" 
                     className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-brand transition-colors text-sm" 

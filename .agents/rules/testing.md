@@ -21,15 +21,14 @@ Este arquivo contém as regras específicas para testes automatizados da aplica�
 ---
 
 ## 3. Quality Gate & Cobertura de Testes
-- **Métricas do Quality Gate**: Execute `npm run test:coverage` e `npm run quality-gate` para gerar e validar os relatórios de cobertura e verificar regressões de código, arquivos com tamanho excessivo (>300 linhas) e duplicações.
+- **Exclusividade do CI/CD**: O **Quality Gate roda exclusivamente via pipeline CI/CD no GitHub**. **NUNCA execute `npm run quality-gate` nem `node scripts/quality-gate.js` localmente**, e **NUNCA execute `--update-baseline` nem modifique `.quality-gate-baseline.json`**.
 - **Ampliação da Cobertura**: Sempre que criar novas funções utilitárias ou refatorar componentes/lógicas de negócio, crie arquivos de testes em `src/lib/*.test.ts` ou `src/components/*.test.tsx` visando elevar gradualmente a cobertura de testes do projeto.
-- **PROIBIDO Atualizar Baseline Localmente**: **NUNCA** execute `node scripts/quality-gate.js --update-baseline` nem altere o arquivo `.quality-gate-baseline.json`. O arquivo de baseline reflete a branch principal (`main`) e só deve ser atualizado pelo pipeline CI/CD do GitHub no merge.
+- **Validação Local**: Para validar localmente antes de commits ou PRs, utilize apenas testes unitários (`npx vitest run`), linter (`npm run lint`) e build (`npm run build`).
 
 ---
 
 ## 4. Comandos Importantes
-- **Execução Única**: `npx vitest run` para rodar todos os testes do projeto uma única vez.
-- **Execução com Cobertura**: `npm run test:coverage` para gerar os relatórios de cobertura do Vitest (`coverage/coverage-summary.json`).
-- **Quality Gate**: `npm run quality-gate` (sem `--update-baseline`) para executar a verificação e comparar com a baseline do main.
+- **Execução Única dos Testes**: `npx vitest run` para rodar todos os testes do projeto uma única vez.
+- **Execução com Cobertura**: `npm run test:coverage` para inspecionar métricas de cobertura de código localmente via Vitest.
 - **Modo Assistido (Watch)**: `npm run test` (ou `npx vitest`) para manter o runner ativo reexecutando testes mediante alterações de arquivos.
-- **Integração Contínua (Local)**: Sempre rode a suíte completa de testes e o quality gate antes de realizar commits, push ou finalizar tarefas.
+- **Integração Contínua (Local)**: Sempre rode `npx vitest run`, `npm run lint` e `npm run build` antes de realizar commits, push ou finalizar tarefas.

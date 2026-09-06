@@ -95,6 +95,9 @@ export async function parseTransactionViaAI(text: string) {
 
     const extractedData = await extractFinancialData(text, categoryNames);
     if (!extractedData) return { error: 'Não consegui entender a transação. Tente ser mais claro, ex: "Uber 25 reais no Nubank".' };
+    if (extractedData.amount == null || isNaN(Number(extractedData.amount)) || Number(extractedData.amount) <= 0) {
+      return { error: 'Identifiquei a transação, mas não encontrei o valor. Tente incluir o valor, ex: "Uber 25 reais no Nubank".' };
+    }
 
     return { success: true, data: extractedData };
   } catch (e: unknown) {
@@ -114,6 +117,9 @@ export async function addTransactionViaAI(text: string) {
   try {
     const extractedData = await extractFinancialData(text);
     if (!extractedData) return { error: 'Não consegui entender a transação. Tente ser mais claro, ex: "Uber 25 reais".' };
+    if (extractedData.amount == null || isNaN(Number(extractedData.amount)) || Number(extractedData.amount) <= 0) {
+      return { error: 'Identifiquei a transação, mas não encontrei o valor. Tente incluir o valor, ex: "Uber 25 reais".' };
+    }
 
     // Buscar contas e cartões para associação automática
     const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, session.user.id));
@@ -121,7 +127,7 @@ export async function addTransactionViaAI(text: string) {
 
     let accountId: string | null = null;
     let creditCardId: string | null = null;
-    const parsedAmount = extractedData.amount;
+    const parsedAmount = Number(extractedData.amount);
 
     if (extractedData.type === 'income') {
       if (userAccounts.length === 0) {
@@ -163,7 +169,7 @@ export async function addTransactionViaAI(text: string) {
 
     await db.insert(transactions).values({
       userId: session.user.id,
-      amount: extractedData.amount.toString(),
+      amount: parsedAmount.toString(),
       description: extractedData.description,
       category: extractedData.category,
       type: extractedData.type as "income" | "expense",

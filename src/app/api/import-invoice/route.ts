@@ -109,14 +109,18 @@ export async function POST(req: NextRequest) {
     // Enviar para o Gemini
     const extractedData = await extractInvoiceTransactions(text, catNames, referenceDateStr);
 
-    if (extractedData.length === 0) {
-      return NextResponse.json({ error: 'Não foi possível encontrar transações na fatura ou a IA não conseguiu processar.' }, { status: 400 });
+    const validTxs = extractedData.filter(
+      tx => tx.amount != null && !isNaN(Number(tx.amount)) && Number(tx.amount) > 0
+    );
+
+    if (validTxs.length === 0) {
+      return NextResponse.json({ error: 'Não foi possível encontrar transações válidas na fatura ou a IA não conseguiu processar.' }, { status: 400 });
     }
 
     // Preparar inserção no banco
-    const txToInsert = extractedData.map(tx => ({
+    const txToInsert = validTxs.map(tx => ({
       userId: session.user.id,
-      amount: tx.amount.toString(),
+      amount: Number(tx.amount).toString(),
       description: tx.description,
       category: tx.category,
       type: 'expense' as const,
