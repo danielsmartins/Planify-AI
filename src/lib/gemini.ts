@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "dummy_key");
 
 export interface ExtractedData {
-  amount: number;
+  amount: number | null;
   description: string;
   category: string;
   type: 'income' | 'expense';
@@ -30,7 +30,7 @@ Sua tarefa é extrair os seguintes dados financeiros da mensagem (áudio ou text
 
 Formato esperado:
 {
-  "amount": número (valor em float da parcela, ex: 25.50. Se o usuário falar "Comprei algo de 1000 reais em 10 vezes", o valor da parcela é 100),
+  "amount": número ou null (valor em float da parcela, ex: 25.50. Se o usuário falar "Comprei algo de 1000 reais em 10 vezes", o valor da parcela é 100. Se o usuário NÃO informou nenhum valor/preço na mensagem, retorne null),
   "description": string (descrição curta do que foi gasto/ganho),
   "category": string (uma palavra que classifique. ex: Alimentação, Transporte, Saúde, Salário, Compras, etc),
   "type": string ("income" se for entrada de dinheiro/ganho, ou "expense" se for um gasto/despesa),
@@ -46,6 +46,7 @@ Regras:
 1. Tente classificar a despesa/ganho em uma das categorias existentes. SE NÃO SE ENCAIXAR em nenhuma, crie UMA NOVA CATEGORIA que seja concisa e faça sentido (ex: Saúde, Educação, Casa).
 2. Se a mensagem não parecer uma transação financeira, retorne um array vazio ou objeto nulo.
 3. Se for parcelado, MAS o usuário der APENAS o valor TOTAL, divida o valor total pelas parcelas para preencher o "amount". Ex: "TV de 2000 em 10x" -> amount = 200, isInstallment = true, installmentsCount = 10. Se ele falar "uma tv em 10 parcelas de 200", o amount já é 200.
+4. Se o usuário NÃO informar o valor monetário da transação, retorne o campo "amount" como null. NUNCA presuma ou invente um valor.
 `;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

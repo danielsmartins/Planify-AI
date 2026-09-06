@@ -5,7 +5,7 @@ import crypto from "crypto";
 import { eq } from "drizzle-orm";
 import { extractFinancialData, extractInvoiceTransactions } from "@/lib/gemini";
 import { sendTelegramMessage, answerCallbackQuery } from "@/lib/telegram";
-import { getPaymentMethodSuggestion } from "@/lib/telegram-utils";
+import { getPaymentMethodSuggestion, validateFinancialData, buildMissingAmountPrompt } from "@/lib/telegram-utils";
 import { rateLimit } from "@/lib/rate-limit";
 import { calculateCreditCardDate } from "@/lib/credit-card-helpers";
 
@@ -71,7 +71,6 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    console.log("=== WEBHOOK RECEBIDO ===", JSON.stringify(body, null, 2));
 
     if (body.message?.chat?.id) {
       chatId = body.message.chat.id.toString();
@@ -344,8 +343,12 @@ export async function POST(req: NextRequest) {
       // Chamar Gemini para extrair transações da fatura
       const extractedData = await extractInvoiceTransactions(text, catNames);
 
-      if (extractedData.length === 0) {
-        await sendTelegramMessage(chatId, "⚠️ Não consegui encontrar nenhuma transação de compras na fatura enviada.");
+      const validInvoiceTxs = extractedData.filter(
+        tx => tx.amount != null && !isNaN(Number(tx.amount)) && Number(tx.amount) > 0
+      );
+
+      if (validInvoiceTxs.length === 0) {
+        await sendTelegramMessage(chatId, "⚠️ Não consegui encontrar nenhuma transação de compras válida na fatura enviada.");
         return NextResponse.json({ status: "No transactions extracted" });
       }
 
@@ -369,9 +372,9 @@ export async function POST(req: NextRequest) {
 
       const importGroupId = crypto.randomUUID();
 
-      const txValues = extractedData.map(tx => ({
+      const txValues = validInvoiceTxs.map(tx => ({
         userId: user.id,
-        amount: tx.amount.toString(),
+        amount: Number(tx.amount).toString(),
         description: tx.description,
         category: tx.category,
         type: 'expense' as const,
@@ -407,7 +410,7 @@ export async function POST(req: NextRequest) {
 
       await sendTelegramMessage(
         chatId, 
-        `📄 *Fatura PDF analisada!*${suggestionMsg}\n\nEncontrei *${extractedData.length} compras* na fatura.\n\nPara qual cartão de crédito deseja importar estas transações?`,
+        `📄 *Fatura PDF analisada!*${suggestionMsg}\n\nEncontrei *${validInvoiceTxs.length} compras* na fatura.\n\nPara qual cartão de crédito deseja importar estas transações?`,
         replyMarkup,
         message.message_id
       );
@@ -529,18 +532,31 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
       throw e;
     }
 
-    if (!extractedData) {
+    const validation = validateFinancialData(extractedData);
+    if (!validation.valid) {
+      if (validation.reason === 'missing_amount') {
+        const msg = buildMissingAmountPrompt(
+          validation.description,
+          validation.paymentMethodSuggestion,
+          Boolean(message.voice)
+        );
+        await sendTelegramMessage(chatId, msg);
+        return NextResponse.json({ status: "Missing amount" });
+      }
+
       await sendTelegramMessage(chatId, message.voice ? "🤔 Não consegui identificar um gasto ou ganho no seu áudio. Pode tentar falar mais claro ou mandar como texto?" : "🤔 Não consegui identificar um gasto ou ganho nessa mensagem. Pode tentar escrever de outra forma?\n\nExemplo: `Uber 25 reais`");
       return NextResponse.json({ status: "Ignored text" });
     }
 
+    const financialData = validation.data;
+
     // Se a IA criou uma categoria nova, salvamos no banco!
-    if (!userCategories.includes(extractedData.category) && extractedData.type === 'expense') {
+    if (!userCategories.includes(financialData.category) && financialData.type === 'expense') {
       const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6'];
       const randomColor = colors[Math.floor(Math.random() * colors.length)];
       await db.insert(categories).values({
         userId: user.id,
-        name: extractedData.category,
+        name: financialData.category,
         color: randomColor,
         monthlyLimit: '0'
       });
@@ -555,12 +571,12 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
       textMessage,
       userCards,
       userAccounts,
-      extractedData.paymentMethodSuggestion,
-      extractedData.isInstallment
+      financialData.paymentMethodSuggestion,
+      financialData.isInstallment
     );
 
     // Se for uma compra parcelada
-    if (extractedData.isInstallment && extractedData.installmentsCount) {
+    if (financialData.isInstallment && financialData.installmentsCount) {
       const defaultCardId = suggestedCardId || (userCards.length > 0 ? userCards[0].id : null);
       
       if (!defaultCardId && userAccounts.length === 0) {
@@ -568,15 +584,15 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
         return NextResponse.json({ status: "No accounts or cards" });
       }
 
-      const installmentsCount = extractedData.installmentsCount;
-      const currentInst = extractedData.currentInstallment || 1;
-      const installmentAmount = extractedData.amount;
+      const installmentsCount = financialData.installmentsCount;
+      const currentInst = financialData.currentInstallment || 1;
+      const installmentAmount = financialData.amount;
       const totalAmount = installmentAmount * installmentsCount;
 
       const [newInst] = await db.insert(installments).values({
         userId: user.id,
-        description: extractedData.description,
-        category: extractedData.category,
+        description: financialData.description,
+        category: financialData.category,
         totalAmount: totalAmount.toString(),
         installmentsCount: installmentsCount.toString(),
         creditCardId: defaultCardId || null,
@@ -590,8 +606,8 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
         txValues.push({
           userId: user.id,
           amount: installmentAmount.toString(),
-          description: `${extractedData.description} (${i}/${installmentsCount})`,
-          category: extractedData.category,
+          description: `${financialData.description} (${i}/${installmentsCount})`,
+          category: financialData.category,
           type: 'expense' as const,
           installmentId: newInst.id,
           creditCardId: defaultCardId || null,
@@ -605,8 +621,8 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
         await db.insert(transactions).values(txValues);
       }
 
+      // Criar botões interativos para vincular ao cartão ou conta
       const inlineKeyboard = [];
-      
       for (let i = 0; i < userCards.length; i++) {
         const card = userCards[i];
         const isSuggested = card.id === defaultCardId;
@@ -637,7 +653,7 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
 
       await sendTelegramMessage(
         chatId, 
-        `💳 *Revisão de Compra Parcelada*\n\nDescrição: *${extractedData.description}*\nValor da Parcela: *R$ ${installmentAmount}*\nParcelas: *${installmentsCount}x*\nTotal: *R$ ${totalAmount}*\nCategoria: *${extractedData.category}*${suggestionText}\n\nSelecione onde foi feito o parcelamento para confirmar:`, 
+        `💳 *Revisão de Compra Parcelada*\n\nDescrição: *${financialData.description}*\nValor da Parcela: *R$ ${installmentAmount}*\nParcelas: *${installmentsCount}x*\nTotal: *R$ ${totalAmount}*\nCategoria: *${financialData.category}*${suggestionText}\n\nSelecione onde foi feito o parcelamento para confirmar:`, 
         replyMarkup
       );
       
@@ -647,21 +663,21 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
     // Se for transação normal (não parcelada)
     const [newTx] = await db.insert(transactions).values({
       userId: user.id,
-      amount: extractedData.amount.toString(),
-      description: extractedData.description,
-      category: extractedData.category,
-      type: extractedData.type as "income" | "expense",
+      amount: financialData.amount.toString(),
+      description: financialData.description,
+      category: financialData.category,
+      type: financialData.type as "income" | "expense",
       accountId: suggestedAccountId,
       creditCardId: suggestedCardId,
       status: 'pending',
     }).returning();
 
-    const tipo = extractedData.type === 'income' ? 'Entrada' : 'Saída';
-    const icone = extractedData.type === 'income' ? '✅' : '💸';
+    const tipo = financialData.type === 'income' ? 'Entrada' : 'Saída';
+    const icone = financialData.type === 'income' ? '✅' : '💸';
 
     const inlineKeyboard = [];
 
-    if (extractedData.type === 'expense') {
+    if (financialData.type === 'expense') {
       for (let i = 0; i < userCards.length; i++) {
         const card = userCards[i];
         const isSuggested = card.id === suggestedCardId;
@@ -695,7 +711,7 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
     const replyMarkup = { inline_keyboard: inlineKeyboard };
 
     let suggestionText = "";
-    if (extractedData.type === 'expense' && suggestedCardId) {
+    if (financialData.type === 'expense' && suggestedCardId) {
       const cardName = userCards.find(c => c.id === suggestedCardId)?.name;
       suggestionText = `\nSugestão de Pagamento: *💳 ${cardName}*`;
     } else if (suggestedAccountId) {
@@ -705,7 +721,7 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
 
     await sendTelegramMessage(
       chatId, 
-      `${icone} *Revisão de Transação*\n\nTipo: *${tipo}*\nDescrição: *${extractedData.description}*\nValor: *R$ ${extractedData.amount}*\nCategoria: *${extractedData.category}*${suggestionText}\n\nSelecione onde foi feito o pagamento/recebimento para confirmar:`, 
+      `${icone} *Revisão de Transação*\n\nTipo: *${tipo}*\nDescrição: *${financialData.description}*\nValor: *R$ ${financialData.amount}*\nCategoria: *${financialData.category}*${suggestionText}\n\nSelecione onde foi feito o pagamento/recebimento para confirmar:`, 
       replyMarkup
     );
 

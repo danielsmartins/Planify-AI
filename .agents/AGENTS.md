@@ -21,4 +21,4 @@ Antes de criar, modificar ou refatorar qualquer parte do código, você **DEVE**
 ## ⚙️ Regras de Qualidade Obrigatórias (Sempre Ativas)
 - **TypeScript Estrito**: Use TypeScript Strict em todo o projeto. **Nunca use `any`**.
 - **Linter e Build**: Sempre execute o linter (`npm run lint`) e o build (`npm run build`) para validar a ausência de erros antes de finalizar qualquer tarefa, realizar commits ou push.
-- **Preservação da Baseline do Quality Gate**: **NUNCA** execute `--update-baseline` nem modifique `.quality-gate-baseline.json`. A baseline deve permanecer intacta para que os deltas ($\Delta$) sejam exibidos corretamente nos Pull Requests. A atualização da baseline ocorre exclusivamente via CI/CD no GitHub.
+- **Preservação e Execução do Quality Gate**: **NUNCA execute o Quality Gate (`npm run quality-gate` ou `node scripts/quality-gate.js`) localmente**, e **NUNCA execute `--update-baseline` nem modifique `.quality-gate-baseline.json`**. O Quality Gate roda **exclusivamente via CI/CD no GitHub**. Localmente, valide o código exclusivamente com testes unitários (`npx vitest run`), linter (`npm run lint`) e build (`npm run build`).
