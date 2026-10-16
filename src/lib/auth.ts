@@ -106,6 +106,7 @@ export async function register(formData: FormData) {
       { userId: newUser.id, name: 'Transporte', color: '#f59e0b' },
       { userId: newUser.id, name: 'Lazer', color: '#8b5cf6' },
       { userId: newUser.id, name: 'Moradia', color: '#3b82f6' },
+      { userId: newUser.id, name: 'Investimentos', color: '#0ea5e9' },
     ]);
     
     return { success: true };
