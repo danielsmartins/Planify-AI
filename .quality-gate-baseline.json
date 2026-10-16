@@ -1,10 +1,10 @@
 {
-  "coverageLines": 10.35,
-  "coverageStatements": 10.19,
-  "coverageFunctions": 5.11,
-  "coverageBranches": 10.2,
-  "duplicationPct": 25.899280575539567,
-  "duplicationFragments": 613,
+  "coverageLines": 10.14,
+  "coverageStatements": 9.98,
+  "coverageFunctions": 4.96,
+  "coverageBranches": 9.83,
+  "duplicationPct": 25.271360979682715,
+  "duplicationFragments": 621,
   "ruleViolations": 6,
   "oversizedFiles": 10
 }
