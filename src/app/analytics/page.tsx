@@ -7,7 +7,7 @@ import { MonthlyChart } from '@/components/analytics/MonthlyChart';
 import { CategoryPieChart } from '@/components/analytics/CategoryPieChart';
 import { CategoryLimitChart } from '@/components/analytics/CategoryLimitChart';
 import { StatCard } from '@/components/dashboard/StatCard';
-import { Wallet, TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, PiggyBank, Sparkles } from 'lucide-react';
 import { PdfReportButton } from '@/components/analytics/PdfReportButton';
 
 export default async function AnalyticsPage() {
@@ -42,11 +42,13 @@ export default async function AnalyticsPage() {
   });
 
   // Agrupa transações por mês (MM/YYYY)
-  const monthlyMap: Record<string, { income: number, expense: number, dateObj: Date }> = {};
+  const monthlyMap: Record<string, { income: number, expense: number, invested: number, dateObj: Date }> = {};
   const categoryTotals: Record<string, number> = {};
+  const monthlyCategoryTotals: Record<string, Record<string, number>> = {};
 
   let totalIncome = 0;
   let totalExpense = 0;
+  let totalInvested = 0;
 
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const currentMonthCategoryTotals: Record<string, number> = {};
@@ -56,11 +58,10 @@ export default async function AnalyticsPage() {
     if (isCardPayment) return;
 
     const d = new Date(tx.createdAt);
-    // Ex: "06/2026"
     const monthKey = `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
     
     if (!monthlyMap[monthKey]) {
-      monthlyMap[monthKey] = { income: 0, expense: 0, dateObj: d };
+      monthlyMap[monthKey] = { income: 0, expense: 0, invested: 0, dateObj: d };
     }
     
     const val = parseFloat(tx.amount);
@@ -72,6 +73,17 @@ export default async function AnalyticsPage() {
       totalExpense += val;
       categoryTotals[tx.category] = (categoryTotals[tx.category] || 0) + val;
       
+      const isInvestment = tx.category.toLowerCase().includes('investimento');
+      if (isInvestment) {
+        totalInvested += val;
+        monthlyMap[monthKey].invested = (monthlyMap[monthKey].invested || 0) + val;
+      }
+
+      if (!monthlyCategoryTotals[monthKey]) {
+        monthlyCategoryTotals[monthKey] = {};
+      }
+      monthlyCategoryTotals[monthKey][tx.category] = (monthlyCategoryTotals[monthKey][tx.category] || 0) + val;
+
       // Se for do mês atual, soma para o gráfico de limites
       if (d >= startOfMonth && d <= endOfMonth) {
         currentMonthCategoryTotals[tx.category] = (currentMonthCategoryTotals[tx.category] || 0) + val;
@@ -79,13 +91,23 @@ export default async function AnalyticsPage() {
     }
   });
 
-  // Ordena os meses cronologicamente
+  // Métricas agregadas de inteligência financeira
+  const totalCashNet = totalIncome - totalExpense;
+  const realConsumption = totalExpense - totalInvested;
+  const totalSaved = totalCashNet + totalInvested;
+  const savingsRate = totalIncome > 0 ? (totalSaved / totalIncome) * 100 : 0;
+  const monthCount = Math.max(1, Object.keys(monthlyMap).length);
+  const avgIncome = totalIncome / monthCount;
+  const avgConsumption = realConsumption / monthCount;
+
+  // Ordena os meses cronologicamente para a linha do tempo
   const sortedData = Object.entries(monthlyMap)
     .sort(([, a], [, b]) => a.dateObj.getTime() - b.dateObj.getTime())
     .map(([month, data]) => ({
       month,
       income: data.income,
-      expense: data.expense
+      expense: data.expense,
+      invested: data.invested || 0,
     }));
 
   const pieData = Object.entries(categoryTotals)
@@ -95,6 +117,23 @@ export default async function AnalyticsPage() {
       color: categoryColorMap[name] || '#64748b'
     }))
     .sort((a, b) => b.value - a.value);
+
+  // Mapeia categorias por mês
+  const monthlyCategoryData: Record<string, { name: string; value: number; color: string }[]> = {};
+  for (const [monthKey, catMap] of Object.entries(monthlyCategoryTotals)) {
+    monthlyCategoryData[monthKey] = Object.entries(catMap)
+      .map(([name, value]) => ({
+        name,
+        value,
+        color: categoryColorMap[name] || '#64748b'
+      }))
+      .sort((a, b) => b.value - a.value);
+  }
+
+  // Meses ordenados do mais recente para o mais antigo (para exibição no select)
+  const availableMonths = Object.entries(monthlyMap)
+    .sort(([, a], [, b]) => b.dateObj.getTime() - a.dateObj.getTime())
+    .map(([month]) => month);
 
   // Prepara dados do gráfico de limites (apenas mês atual)
   const limitsData = Object.entries(categoryLimitsMap).map(([name, limit]) => {
@@ -125,15 +164,59 @@ export default async function AnalyticsPage() {
       </header>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <StatCard title="Entradas Totais" amount={formatBRL(totalIncome)} icon={TrendingUp} trend="up" />
-        <StatCard title="Saídas Totais" amount={formatBRL(totalExpense)} icon={TrendingDown} trend="down" />
-        <StatCard title="Saldo Acumulado" amount={formatBRL(totalIncome - totalExpense)} icon={Wallet} isAccent />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
+        <StatCard
+          title="Entradas Totais"
+          amount={formatBRL(totalIncome)}
+          icon={TrendingUp}
+          trend="up"
+          subtitle={`Média: ${formatBRL(avgIncome)}/mês`}
+        />
+        <StatCard
+          title="Saídas Totais"
+          amount={formatBRL(totalExpense)}
+          icon={TrendingDown}
+          trend="down"
+          subtitle={`Consumo: ${formatBRL(realConsumption)} • Aportes: ${formatBRL(totalInvested)}`}
+        />
+        <StatCard
+          title="Investimentos (Patrimônio)"
+          amount={formatBRL(totalInvested)}
+          icon={PiggyBank}
+          badge="Poupado"
+          subtitle="Aportes convertidos em patrimônio"
+        />
+        <StatCard
+          title="Taxa Real de Poupança"
+          amount={`${savingsRate.toFixed(1)}%`}
+          icon={Sparkles}
+          isAccent
+          badge={savingsRate >= 15 ? 'Excelente' : savingsRate >= 10 ? 'Boa' : 'Em evolução'}
+          subtitle={`Total poupado: ${formatBRL(totalSaved)} (Aportes + Caixa)`}
+        />
+      </div>
+
+      {/* Intelligence Banner */}
+      <div className="glass-panel p-4 rounded-xl border border-neutral-800 mb-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 text-neutral-300">
+          <span className="w-2 h-2 rounded-full bg-brand animate-pulse" />
+          <span>
+            <strong className="text-white">Inteligência Financeira:</strong> Seus gastos na categoria <strong className="text-sky-400">Investimentos</strong> ({formatBRL(totalInvested)}) são calculados como <strong className="text-emerald-400">renda poupada</strong>, e não como consumo descartável.
+          </span>
+        </div>
+        <div className="flex items-center gap-4 text-neutral-400 font-medium">
+          <span>Custo de vida médio: <strong className="text-neutral-200">{formatBRL(avgConsumption)}/mês</strong></span>
+          <span>Saldo em caixa: <strong className={totalCashNet >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{formatBRL(totalCashNet)}</strong></span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <MonthlyChart data={sortedData} />
-        <CategoryPieChart data={pieData} />
+        <CategoryPieChart
+          allTimeData={pieData}
+          monthlyData={monthlyCategoryData}
+          availableMonths={availableMonths}
+        />
       </div>
 
       <div className="w-full">
