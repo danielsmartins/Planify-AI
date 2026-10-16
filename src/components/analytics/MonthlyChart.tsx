@@ -69,7 +69,7 @@ function CustomMonthlyTooltip({ active, payload, label }: CustomTooltipProps) {
         </div>
       )}
       <div className="border-t border-neutral-800/80 pt-1.5 mt-1 flex justify-between items-center gap-3">
-        <span className="text-neutral-400 font-medium">Balanço em Caixa:</span>
+        <span className="text-neutral-400 font-medium">Resultado do Mês:</span>
         <span className={`font-bold ${isSurplus ? 'text-emerald-400' : 'text-rose-400'}`}>
           {isSurplus ? `+${formatBRL(net)}` : formatBRL(net)}
         </span>

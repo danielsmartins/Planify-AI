@@ -102,6 +102,7 @@ export function OnboardingWizard({ user, initialCategories }: OnboardingWizardPr
       { name: 'Transporte', color: '#f59e0b', monthlyLimit: 0 },
       { name: 'Lazer', color: '#8b5cf6', monthlyLimit: 0 },
       { name: 'Moradia', color: '#3b82f6', monthlyLimit: 0 },
+      { name: 'Investimentos', color: '#0ea5e9', monthlyLimit: 0 },
     ];
   });
   const [newCatName, setNewCatName] = useState('');

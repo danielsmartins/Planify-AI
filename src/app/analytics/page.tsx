@@ -1,7 +1,7 @@
 import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { db } from '@/db';
-import { transactions, categories } from '@/db/schema';
+import { transactions, categories, accounts } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { MonthlyChart } from '@/components/analytics/MonthlyChart';
 import { CategoryPieChart } from '@/components/analytics/CategoryPieChart';
@@ -40,6 +40,10 @@ export default async function AnalyticsPage() {
     categoryColorMap[c.name] = c.color; 
     categoryLimitsMap[c.name] = parseFloat(c.monthlyLimit || '0');
   });
+
+  // Busca saldo atual real das contas bancárias
+  const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, session.user.id));
+  const totalBankBalance = userAccounts.reduce((sum, acc) => sum + parseFloat(acc.balance || '0'), 0);
 
   // Agrupa transações por mês (MM/YYYY)
   const monthlyMap: Record<string, { income: number, expense: number, invested: number, dateObj: Date }> = {};
@@ -192,7 +196,7 @@ export default async function AnalyticsPage() {
           icon={Sparkles}
           isAccent
           badge={savingsRate >= 15 ? 'Excelente' : savingsRate >= 10 ? 'Boa' : 'Em evolução'}
-          subtitle={`Total poupado: ${formatBRL(totalSaved)} (Aportes + Caixa)`}
+          subtitle={`Total poupado: ${formatBRL(totalSaved)} (Aportes + Balanço)`}
         />
       </div>
 
@@ -201,12 +205,21 @@ export default async function AnalyticsPage() {
         <div className="flex items-center gap-2 text-neutral-300">
           <span className="w-2 h-2 rounded-full bg-brand animate-pulse" />
           <span>
-            <strong className="text-white">Inteligência Financeira:</strong> Seus gastos na categoria <strong className="text-sky-400">Investimentos</strong> ({formatBRL(totalInvested)}) são calculados como <strong className="text-emerald-400">renda poupada</strong>, e não como consumo descartável.
+            {totalInvested > 0 ? (
+              <>
+                <strong className="text-white">Inteligência Financeira:</strong> Seus gastos na categoria <strong className="text-sky-400">Investimentos</strong> ({formatBRL(totalInvested)}) são calculados como <strong className="text-emerald-400">renda poupada</strong>, e não como consumo descartável.
+              </>
+            ) : (
+              <>
+                <strong className="text-white">Dica Financeira:</strong> Ao registrar despesas na categoria <strong className="text-sky-400">Investimentos</strong>, o sistema calcula como <strong className="text-emerald-400">patrimônio poupado</strong>, sem penalizar seu custo de vida.
+              </>
+            )}
           </span>
         </div>
-        <div className="flex items-center gap-4 text-neutral-400 font-medium">
+        <div className="flex flex-wrap items-center gap-4 text-neutral-400 font-medium">
           <span>Custo de vida médio: <strong className="text-neutral-200">{formatBRL(avgConsumption)}/mês</strong></span>
-          <span>Saldo em caixa: <strong className={totalCashNet >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{formatBRL(totalCashNet)}</strong></span>
+          <span>Balanço histórico: <strong className={totalCashNet >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{formatBRL(totalCashNet)}</strong></span>
+          <span>Saldo em conta: <strong className="text-emerald-400">{formatBRL(totalBankBalance)}</strong></span>
         </div>
       </div>
 
