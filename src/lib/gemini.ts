@@ -47,6 +47,13 @@ Regras:
 2. Se a mensagem não parecer uma transação financeira, retorne um array vazio ou objeto nulo.
 3. Se for parcelado, MAS o usuário der APENAS o valor TOTAL, divida o valor total pelas parcelas para preencher o "amount". Ex: "TV de 2000 em 10x" -> amount = 200, isInstallment = true, installmentsCount = 10. Se ele falar "uma tv em 10 parcelas de 200", o amount já é 200.
 4. Se o usuário NÃO informar o valor monetário da transação, retorne o campo "amount" como null. NUNCA presuma ou invente um valor.
+5. Classificação estrita do tipo ("type"):
+   - "expense" (Despesa / Saída):
+     * Compras, despesas, contas, taxas, impostos, boletos, pix enviado, pagamentos em geral.
+     * INVESTIMENTOS / APORTES: Aplicações financeiras, investimentos, aportes, compra de ações/FIIs, CDB, Tesouro Direto, poupança, caixinha, etc. (ex: "145,38 Investimento", "investi 500", "aporte de 200", "coloquei 100 no CDB") representam dinheiro SAINDO da conta corrente ou carteira do usuário para um investimento. Portanto, são SEMPRE "expense" (a menos que seja explicitamente um resgate, saque ou rendimento).
+     * Mensagens curtas contendo apenas valor e um nome de item ou categoria (ex: "145,38 Investimento", "50 mercado", "20 uber", "15 cafe") devem ser consideradas "expense".
+   - "income" (Receita / Entrada):
+     * Deve ser utilizado EXCLUSIVAMENTE quando for expressamente uma entrada de dinheiro na conta, como: "salário", "recebi", "ganhei", "rendimento", "dividendos", "lucro", "resgate de investimento" (quando saca de volta para a conta), "saquei da caixinha/poupança", "venda de algo", "reembolso", "depósito recebido", "pix recebido de alguém".
 `;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -144,4 +151,3 @@ Regras:
     return [];
   }
 }
-

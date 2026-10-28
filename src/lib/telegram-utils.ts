@@ -139,3 +139,78 @@ export function buildMissingAmountPrompt(
 
   return `🤔 Identifiquei ${desc}, mas não encontrei o *valor* da transação.\n\nPoderia enviar novamente informando quanto custou?\n\nExemplo: ${example}`;
 }
+
+export function revertAccountBalance(
+  currentBalance: number,
+  amount: number,
+  type: 'income' | 'expense'
+): number {
+  const newBalance = type === 'income' ? currentBalance - amount : currentBalance + amount;
+  return Math.round(newBalance * 100) / 100;
+}
+
+export function buildReviewMessage(
+  data: {
+    type: 'income' | 'expense';
+    description: string;
+    amount: number | string;
+    category: string;
+  },
+  suggestionText?: string
+): string {
+  const tipo = data.type === 'income' ? 'Entrada' : 'Saída';
+  const icone = data.type === 'income' ? '✅' : '💸';
+  const sugg = suggestionText ? `\n${suggestionText}` : '';
+
+  return `${icone} *Revisão de Transação*\n\nTipo: *${tipo}*\nDescrição: *${data.description}*\nValor: *R$ ${data.amount}*\nCategoria: *${data.category}*${sugg}\n\nSelecione onde foi feito o pagamento/recebimento para confirmar:`;
+}
+
+export interface KeyboardOption {
+  text: string;
+  callback_data: string;
+}
+
+export function buildReviewKeyboard(
+  txId: string,
+  type: 'income' | 'expense',
+  userAccounts: { id: string; name: string }[],
+  userCards: { id: string; name: string }[],
+  suggestedAccountId?: string | null,
+  suggestedCardId?: string | null
+): { inline_keyboard: KeyboardOption[][] } {
+  const inlineKeyboard: KeyboardOption[][] = [];
+
+  if (type === 'expense') {
+    for (let i = 0; i < userCards.length; i++) {
+      const card = userCards[i];
+      const isSuggested = card.id === suggestedCardId;
+      const prefix = isSuggested ? "✨ 💳 " : "💳 ";
+      inlineKeyboard.push([
+        { text: `${prefix}${card.name}`, callback_data: `confirm_${txId}_c${i}` }
+      ]);
+    }
+  }
+
+  for (let i = 0; i < userAccounts.length; i++) {
+    const acc = userAccounts[i];
+    const isSuggested = acc.id === suggestedAccountId;
+    const prefix = isSuggested ? "✨ 🏦 " : "🏦 ";
+    inlineKeyboard.push([
+      { text: `${prefix}${acc.name}`, callback_data: `confirm_${txId}_a${i}` }
+    ]);
+  }
+
+  // Botão para alternar tipo (Entrada <-> Saída)
+  const toggleText = type === 'expense' ? "🔁 Alternar para Entrada" : "🔁 Alternar para Saída";
+  inlineKeyboard.push([
+    { text: toggleText, callback_data: `toggle_type_${txId}` }
+  ]);
+
+  // Botão cancelar
+  inlineKeyboard.push([
+    { text: "❌ Cancelar", callback_data: `cancel_${txId}` }
+  ]);
+
+  return { inline_keyboard: inlineKeyboard };
+}
+
