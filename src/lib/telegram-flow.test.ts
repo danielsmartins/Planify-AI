@@ -3,6 +3,9 @@ import {
   getPaymentMethodSuggestion,
   validateFinancialData,
   buildMissingAmountPrompt,
+  revertAccountBalance,
+  buildReviewMessage,
+  buildReviewKeyboard,
 } from '@/lib/telegram-utils';
 
 describe('Telegram Suggestion Logic', () => {
@@ -170,3 +173,105 @@ describe('Missing Amount Prompt Builder', () => {
     expect(prompt).toContain('`Uber 25 reais`');
   });
 });
+
+describe('Account Balance Reversion Logic', () => {
+  test('reverts income by subtracting amount from balance (bug fix verification)', () => {
+    // Caso exato do bug reportado pelo usuário:
+    // Saldo inicial era 153.19. Entrada indevida somou 145.38 -> 298.57.
+    // Ao cancelar, deve subtrair 145.38 e voltar para 153.19.
+    const result = revertAccountBalance(298.57, 145.38, 'income');
+    expect(result).toBe(153.19);
+  });
+
+  test('handles floating point precision cleanly during income reversion', () => {
+    const result = revertAccountBalance(298.5699999999998, 145.38, 'income');
+    expect(result).toBe(153.19);
+  });
+
+  test('reverts expense by adding amount back to balance', () => {
+    // Se uma despesa de 50 foi cancelada, saldo de 100 volta para 150
+    const result = revertAccountBalance(100, 50, 'expense');
+    expect(result).toBe(150);
+  });
+});
+
+describe('Telegram Review Message & Keyboard Builder', () => {
+  const mockCards = [
+    { id: 'card-1', name: 'Nubank' },
+    { id: 'card-2', name: 'Amazon' }
+  ];
+
+  const mockAccounts = [
+    { id: 'acc-1', name: 'Santander' },
+    { id: 'acc-2', name: 'Mercado Pago' }
+  ];
+
+  test('builds review message for expense with suggestion', () => {
+    const msg = buildReviewMessage(
+      {
+        type: 'expense',
+        description: 'Investimento',
+        amount: 145.38,
+        category: 'Investimentos',
+      },
+      'Sugestão de Conta: *🏦 Mercado Pago*'
+    );
+
+    expect(msg).toContain('💸 *Revisão de Transação*');
+    expect(msg).toContain('Tipo: *Saída*');
+    expect(msg).toContain('Descrição: *Investimento*');
+    expect(msg).toContain('Valor: *R$ 145.38*');
+    expect(msg).toContain('Sugestão de Conta: *🏦 Mercado Pago*');
+  });
+
+  test('builds review message for income without suggestion', () => {
+    const msg = buildReviewMessage({
+      type: 'income',
+      description: 'Salário',
+      amount: 1500,
+      category: 'Salário',
+    });
+
+    expect(msg).toContain('✅ *Revisão de Transação*');
+    expect(msg).toContain('Tipo: *Entrada*');
+    expect(msg).toContain('Descrição: *Salário*');
+  });
+
+  test('builds keyboard for expense including cards, accounts, toggle and cancel', () => {
+    const keyboard = buildReviewKeyboard('tx-123', 'expense', mockAccounts, mockCards, 'acc-2', 'card-1');
+    const flat = keyboard.inline_keyboard.flat();
+
+    // Cards
+    expect(flat.some(btn => btn.text.includes('✨ 💳 Nubank') && btn.callback_data === 'confirm_tx-123_c0')).toBe(true);
+    expect(flat.some(btn => btn.text.includes('💳 Amazon') && btn.callback_data === 'confirm_tx-123_c1')).toBe(true);
+
+    // Accounts
+    expect(flat.some(btn => btn.text.includes('🏦 Santander') && btn.callback_data === 'confirm_tx-123_a0')).toBe(true);
+    expect(flat.some(btn => btn.text.includes('✨ 🏦 Mercado Pago') && btn.callback_data === 'confirm_tx-123_a1')).toBe(true);
+
+    // Toggle button to Income
+    expect(flat.some(btn => btn.text === '🔁 Alternar para Entrada' && btn.callback_data === 'toggle_type_tx-123')).toBe(true);
+
+    // Cancel button
+    expect(flat.some(btn => btn.text === '❌ Cancelar' && btn.callback_data === 'cancel_tx-123')).toBe(true);
+  });
+
+  test('builds keyboard for income including ONLY accounts, toggle to Expense and cancel', () => {
+    const keyboard = buildReviewKeyboard('tx-456', 'income', mockAccounts, mockCards, 'acc-1', null);
+    const flat = keyboard.inline_keyboard.flat();
+
+    // No cards should be shown for income
+    expect(flat.some(btn => btn.text.includes('💳'))).toBe(false);
+
+    // Accounts should be shown
+    expect(flat.some(btn => btn.text.includes('✨ 🏦 Santander'))).toBe(true);
+    expect(flat.some(btn => btn.text.includes('🏦 Mercado Pago'))).toBe(true);
+
+    // Toggle button to Expense
+    expect(flat.some(btn => btn.text === '🔁 Alternar para Saída' && btn.callback_data === 'toggle_type_tx-456')).toBe(true);
+
+    // Cancel button
+    expect(flat.some(btn => btn.text === '❌ Cancelar' && btn.callback_data === 'cancel_tx-456')).toBe(true);
+  });
+});
+

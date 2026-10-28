@@ -4,8 +4,15 @@ import { users, transactions, categories, installments, accounts, creditCards } 
 import crypto from "crypto";
 import { eq } from "drizzle-orm";
 import { extractFinancialData, extractInvoiceTransactions } from "@/lib/gemini";
-import { sendTelegramMessage, answerCallbackQuery } from "@/lib/telegram";
-import { getPaymentMethodSuggestion, validateFinancialData, buildMissingAmountPrompt } from "@/lib/telegram-utils";
+import { sendTelegramMessage, answerCallbackQuery, editTelegramMessage, editTelegramReplyMarkup } from "@/lib/telegram";
+import { 
+  getPaymentMethodSuggestion, 
+  validateFinancialData, 
+  buildMissingAmountPrompt, 
+  revertAccountBalance, 
+  buildReviewMessage, 
+  buildReviewKeyboard 
+} from "@/lib/telegram-utils";
 import { rateLimit } from "@/lib/rate-limit";
 import { calculateCreditCardDate } from "@/lib/credit-card-helpers";
 
@@ -85,7 +92,8 @@ export async function POST(req: NextRequest) {
     // Lidar com cliques nos botões (callback_query)
     if (body.callback_query) {
       const callbackQuery = body.callback_query;
-      const callbackData = callbackQuery.data; // ex: confirm_123, cancel_123, confirm_inst_123
+      const callbackData = callbackQuery.data; // ex: confirm_123, cancel_123, confirm_inst_123, toggle_type_123
+      const messageId = callbackQuery.message?.message_id;
       
       try {
         if (callbackData.startsWith('confirm_inst_')) {
@@ -101,13 +109,23 @@ export async function POST(req: NextRequest) {
             const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, inst.userId));
             const userCards = await db.select().from(creditCards).where(eq(creditCards.userId, inst.userId));
             
+            if (messageId) {
+              await editTelegramReplyMarkup(chatId, messageId, { inline_keyboard: [] });
+            }
+
+            const undoInstMarkup = {
+              inline_keyboard: [
+                [{ text: "↩️ Desfazer parcelamento", callback_data: `cancel_inst_${instId}` }]
+              ]
+            };
+
             if (typeAndIndex && typeAndIndex.startsWith('c')) {
               const index = parseInt(typeAndIndex.substring(1));
               const card = userCards[index];
               if (card) {
                 await db.update(installments).set({ creditCardId: card.id }).where(eq(installments.id, instId));
                 await db.update(transactions).set({ status: 'confirmed', creditCardId: card.id, accountId: null }).where(eq(transactions.installmentId, instId));
-                await sendTelegramMessage(chatId, `✅ Compra parcelada no cartão *${card.name}* confirmada com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`);
+                await sendTelegramMessage(chatId, `✅ Compra parcelada no cartão *${card.name}* confirmada com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`, undoInstMarkup);
               } else {
                 await sendTelegramMessage(chatId, "⚠️ Cartão selecionado não encontrado.");
               }
@@ -126,17 +144,17 @@ export async function POST(req: NextRequest) {
                 if (currentTx.length > 0) {
                   const currentBalance = parseFloat(acc.balance);
                   const val = parseFloat(currentTx[0].amount);
-                  const newBalance = currentBalance - val;
-                  await db.update(accounts).set({ balance: newBalance.toString() }).where(eq(accounts.id, acc.id));
+                  const newBalance = Math.round((currentBalance - val) * 100) / 100;
+                  await db.update(accounts).set({ balance: newBalance.toFixed(2) }).where(eq(accounts.id, acc.id));
                 }
-                await sendTelegramMessage(chatId, `✅ Compra parcelada na conta *${acc.name}* confirmada com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`);
+                await sendTelegramMessage(chatId, `✅ Compra parcelada na conta *${acc.name}* confirmada com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`, undoInstMarkup);
               } else {
                 await sendTelegramMessage(chatId, "⚠️ Conta selecionada não encontrada.");
               }
             } else {
               // Fallback antigo
               await db.update(transactions).set({ status: 'confirmed' }).where(eq(transactions.installmentId, instId));
-              await sendTelegramMessage(chatId, `✅ Compra parcelada confirmada com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`);
+              await sendTelegramMessage(chatId, `✅ Compra parcelada confirmada com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`, undoInstMarkup);
             }
           } else {
             await sendTelegramMessage(chatId, "⚠️ Compra parcelada não encontrada.");
@@ -144,9 +162,78 @@ export async function POST(req: NextRequest) {
 
         } else if (callbackData.startsWith('cancel_inst_')) {
           const instId = callbackData.replace('cancel_inst_', '');
+          
+          // Reverter débito em conta se alguma parcela já havia sido confirmada
+          const relatedTxs = await db.select().from(transactions).where(eq(transactions.installmentId, instId));
+          for (const tx of relatedTxs) {
+            if (tx.status === 'confirmed' && tx.accountId) {
+              const accRes = await db.select().from(accounts).where(eq(accounts.id, tx.accountId));
+              if (accRes.length > 0) {
+                const acc = accRes[0];
+                const currentBalance = parseFloat(acc.balance);
+                const val = parseFloat(tx.amount);
+                const newBalance = Math.round((currentBalance + val) * 100) / 100;
+                await db.update(accounts).set({ balance: newBalance.toFixed(2) }).where(eq(accounts.id, acc.id));
+              }
+            }
+          }
+
           await db.delete(transactions).where(eq(transactions.installmentId, instId));
           await db.delete(installments).where(eq(installments.id, instId));
+
+          if (messageId) {
+            await editTelegramReplyMarkup(chatId, messageId, { inline_keyboard: [] });
+          }
           await sendTelegramMessage(chatId, "❌ Compra parcelada cancelada.");
+
+        } else if (callbackData.startsWith('toggle_type_')) {
+          const txId = callbackData.replace('toggle_type_', '');
+          const txRes = await db.select().from(transactions).where(eq(transactions.id, txId));
+          if (txRes.length > 0 && txRes[0].status === 'pending') {
+            const tx = txRes[0];
+            const newType: 'income' | 'expense' = tx.type === 'income' ? 'expense' : 'income';
+            await db.update(transactions).set({ type: newType }).where(eq(transactions.id, txId));
+
+            const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, tx.userId));
+            const userCards = await db.select().from(creditCards).where(eq(creditCards.userId, tx.userId));
+
+            let suggestionText = "";
+            if (newType === 'expense' && tx.creditCardId) {
+              const cardName = userCards.find(c => c.id === tx.creditCardId)?.name;
+              if (cardName) suggestionText = `Sugestão de Pagamento: *💳 ${cardName}*`;
+            } else if (tx.accountId) {
+              const accName = userAccounts.find(a => a.id === tx.accountId)?.name;
+              if (accName) suggestionText = `Sugestão de Conta: *🏦 ${accName}*`;
+            }
+
+            const newText = buildReviewMessage(
+              {
+                type: newType,
+                description: tx.description,
+                amount: tx.amount,
+                category: tx.category,
+              },
+              suggestionText
+            );
+
+            const newMarkup = buildReviewKeyboard(
+              tx.id,
+              newType,
+              userAccounts,
+              userCards,
+              tx.accountId,
+              tx.creditCardId
+            );
+
+            if (messageId) {
+              await editTelegramMessage(chatId, messageId, newText, newMarkup);
+            }
+            await answerCallbackQuery(callbackQuery.id, `Tipo alterado para ${newType === 'income' ? 'Entrada' : 'Saída'}!`);
+            return NextResponse.json({ status: "Type toggled" });
+          } else {
+            await answerCallbackQuery(callbackQuery.id, "Transação já processada ou não encontrada.");
+            return NextResponse.json({ status: "Already processed" });
+          }
 
         } else if (callbackData.startsWith('confirm_')) {
           const rest = callbackData.replace('confirm_', '');
@@ -161,6 +248,16 @@ export async function POST(req: NextRequest) {
             const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, tx.userId));
             const userCards = await db.select().from(creditCards).where(eq(creditCards.userId, tx.userId));
 
+            if (messageId) {
+              await editTelegramReplyMarkup(chatId, messageId, { inline_keyboard: [] });
+            }
+
+            const undoMarkup = {
+              inline_keyboard: [
+                [{ text: "↩️ Desfazer lançamento", callback_data: `cancel_${txId}` }]
+              ]
+            };
+
             if (typeAndIndex && typeAndIndex.startsWith('c')) {
               const index = parseInt(typeAndIndex.substring(1));
               const card = userCards[index];
@@ -172,7 +269,7 @@ export async function POST(req: NextRequest) {
                   accountId: null,
                   dueDate: txDueDate
                 }).where(eq(transactions.id, txId));
-                await sendTelegramMessage(chatId, `✅ Transação confirmada no cartão *${card.name}* com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`);
+                await sendTelegramMessage(chatId, `✅ Transação confirmada no cartão *${card.name}* com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`, undoMarkup);
               } else {
                 await sendTelegramMessage(chatId, "⚠️ Cartão selecionado não encontrado.");
               }
@@ -182,15 +279,16 @@ export async function POST(req: NextRequest) {
               if (acc) {
                 const currentBalance = parseFloat(acc.balance);
                 const val = parseFloat(tx.amount);
-                const newBalance = tx.type === 'income' ? currentBalance + val : currentBalance - val;
-                await db.update(accounts).set({ balance: newBalance.toString() }).where(eq(accounts.id, acc.id));
+                const rawNewBalance = tx.type === 'income' ? currentBalance + val : currentBalance - val;
+                const newBalance = Math.round(rawNewBalance * 100) / 100;
+                await db.update(accounts).set({ balance: newBalance.toFixed(2) }).where(eq(accounts.id, acc.id));
 
                 await db.update(transactions).set({ 
                   status: 'confirmed', 
                   accountId: acc.id, 
                   creditCardId: null 
                 }).where(eq(transactions.id, txId));
-                await sendTelegramMessage(chatId, `✅ Transação confirmada na conta *${acc.name}* com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`);
+                await sendTelegramMessage(chatId, `✅ Transação confirmada na conta *${acc.name}* com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`, undoMarkup);
               } else {
                 await sendTelegramMessage(chatId, "⚠️ Conta selecionada não encontrada.");
               }
@@ -202,12 +300,13 @@ export async function POST(req: NextRequest) {
                   const acc = accRes[0];
                   const currentBalance = parseFloat(acc.balance);
                   const val = parseFloat(tx.amount);
-                  const newBalance = tx.type === 'income' ? currentBalance + val : currentBalance - val;
-                  await db.update(accounts).set({ balance: newBalance.toString() }).where(eq(accounts.id, tx.accountId));
+                  const rawNewBalance = tx.type === 'income' ? currentBalance + val : currentBalance - val;
+                  const newBalance = Math.round(rawNewBalance * 100) / 100;
+                  await db.update(accounts).set({ balance: newBalance.toFixed(2) }).where(eq(accounts.id, tx.accountId));
                 }
               }
               await db.update(transactions).set({ status: 'confirmed' }).where(eq(transactions.id, txId));
-              await sendTelegramMessage(chatId, `✅ Transação confirmada e salva com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`);
+              await sendTelegramMessage(chatId, `✅ Transação confirmada e salva com sucesso!\n\n📊 [Ver no Dashboard](${appUrl})`, undoMarkup);
             }
           } else {
             await sendTelegramMessage(chatId, "⚠️ Transação já processada ou não encontrada.");
@@ -215,8 +314,42 @@ export async function POST(req: NextRequest) {
 
         } else if (callbackData.startsWith('cancel_')) {
           const txId = callbackData.split('_')[1];
-          await db.delete(transactions).where(eq(transactions.id, txId));
-          await sendTelegramMessage(chatId, "❌ Transação cancelada.");
+          const txRes = await db.select().from(transactions).where(eq(transactions.id, txId));
+          
+          if (txRes.length > 0) {
+            const tx = txRes[0];
+            let balanceRestored = false;
+
+            // Se a transação já estava confirmada com impacto em conta bancária, reverter o saldo
+            if (tx.status === 'confirmed' && tx.accountId) {
+              const accRes = await db.select().from(accounts).where(eq(accounts.id, tx.accountId));
+              if (accRes.length > 0) {
+                const acc = accRes[0];
+                const currentBalance = parseFloat(acc.balance);
+                const val = parseFloat(tx.amount);
+                const rawNewBalance = revertAccountBalance(currentBalance, val, tx.type as 'income' | 'expense');
+                await db.update(accounts).set({ balance: rawNewBalance.toFixed(2) }).where(eq(accounts.id, acc.id));
+                balanceRestored = true;
+              }
+            }
+
+            await db.delete(transactions).where(eq(transactions.id, txId));
+
+            if (messageId) {
+              await editTelegramReplyMarkup(chatId, messageId, { inline_keyboard: [] });
+            }
+
+            if (balanceRestored) {
+              await sendTelegramMessage(chatId, "❌ Transação cancelada e o saldo da conta foi restaurado com sucesso.");
+            } else {
+              await sendTelegramMessage(chatId, "❌ Transação cancelada.");
+            }
+          } else {
+            if (messageId) {
+              await editTelegramReplyMarkup(chatId, messageId, { inline_keyboard: [] });
+            }
+            await sendTelegramMessage(chatId, "❌ Transação já havia sido cancelada ou não foi encontrada.");
+          }
 
         } else if (callbackData.startsWith('import_pdf_')) {
           const rest = callbackData.replace('import_pdf_', '');
@@ -672,58 +805,35 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
       status: 'pending',
     }).returning();
 
-    const tipo = financialData.type === 'income' ? 'Entrada' : 'Saída';
-    const icone = financialData.type === 'income' ? '✅' : '💸';
-
-    const inlineKeyboard = [];
-
-    if (financialData.type === 'expense') {
-      for (let i = 0; i < userCards.length; i++) {
-        const card = userCards[i];
-        const isSuggested = card.id === suggestedCardId;
-        const prefix = isSuggested ? "✨ 💳 " : "💳 ";
-        inlineKeyboard.push([
-          { text: `${prefix}${card.name}`, callback_data: `confirm_${newTx.id}_c${i}` }
-        ]);
-      }
-      
-      for (let i = 0; i < userAccounts.length; i++) {
-        const acc = userAccounts[i];
-        const isSuggested = acc.id === suggestedAccountId;
-        const prefix = isSuggested ? "✨ 🏦 " : "🏦 ";
-        inlineKeyboard.push([
-          { text: `${prefix}${acc.name}`, callback_data: `confirm_${newTx.id}_a${i}` }
-        ]);
-      }
-    } else {
-      for (let i = 0; i < userAccounts.length; i++) {
-        const acc = userAccounts[i];
-        const isSuggested = acc.id === suggestedAccountId;
-        const prefix = isSuggested ? "✨ 🏦 " : "🏦 ";
-        inlineKeyboard.push([
-          { text: `${prefix}${acc.name}`, callback_data: `confirm_${newTx.id}_a${i}` }
-        ]);
-      }
-    }
-
-    inlineKeyboard.push([{ text: "❌ Cancelar", callback_data: `cancel_${newTx.id}` }]);
-
-    const replyMarkup = { inline_keyboard: inlineKeyboard };
-
     let suggestionText = "";
     if (financialData.type === 'expense' && suggestedCardId) {
       const cardName = userCards.find(c => c.id === suggestedCardId)?.name;
-      suggestionText = `\nSugestão de Pagamento: *💳 ${cardName}*`;
+      if (cardName) suggestionText = `Sugestão de Pagamento: *💳 ${cardName}*`;
     } else if (suggestedAccountId) {
       const accName = userAccounts.find(a => a.id === suggestedAccountId)?.name;
-      suggestionText = `\nSugestão de Conta: *🏦 ${accName}*`;
+      if (accName) suggestionText = `Sugestão de Conta: *🏦 ${accName}*`;
     }
 
-    await sendTelegramMessage(
-      chatId, 
-      `${icone} *Revisão de Transação*\n\nTipo: *${tipo}*\nDescrição: *${financialData.description}*\nValor: *R$ ${financialData.amount}*\nCategoria: *${financialData.category}*${suggestionText}\n\nSelecione onde foi feito o pagamento/recebimento para confirmar:`, 
-      replyMarkup
+    const reviewText = buildReviewMessage(
+      {
+        type: financialData.type,
+        description: financialData.description,
+        amount: financialData.amount,
+        category: financialData.category,
+      },
+      suggestionText
     );
+
+    const replyMarkup = buildReviewKeyboard(
+      newTx.id,
+      financialData.type,
+      userAccounts,
+      userCards,
+      suggestedAccountId,
+      suggestedCardId
+    );
+
+    await sendTelegramMessage(chatId, reviewText, replyMarkup);
 
     return NextResponse.json({ status: "Success awaiting selection" });
 
