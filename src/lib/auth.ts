@@ -38,43 +38,48 @@ export async function decrypt(input: string): Promise<SessionPayload | null> {
 }
 
 export async function login(formData: FormData) {
-  // Apply Rate Limiting (max 5 login attempts per minute)
-  const limiter = await rateLimit(5, 60000);
-  if (!limiter.success) {
-    return { error: `Muitas tentativas de login. Tente novamente em ${limiter.retryAfter} segundos.` };
+  try {
+    // Apply Rate Limiting (max 5 login attempts per minute)
+    const limiter = await rateLimit(5, 60000);
+    if (!limiter.success) {
+      return { error: `Muitas tentativas de login. Tente novamente em ${limiter.retryAfter} segundos.` };
+    }
+
+    // Parse and validate form data with Zod
+    const rawData = Object.fromEntries(formData);
+    const validation = loginSchema.safeParse(rawData);
+    if (!validation.success) {
+      return { error: validation.error.issues[0].message };
+    }
+    const { identifier, password } = validation.data;
+
+    const userRes = await db.select().from(users).where(
+      or(eq(users.email, identifier), eq(users.phone, identifier))
+    );
+    
+    const user = userRes[0];
+    if (!user) return { error: 'Usuário não encontrado.' };
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return { error: 'Senha incorreta.' };
+
+    const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const session = await encrypt({ user: { id: user.id, name: user.name }, expires });
+
+    const cookieStore = await cookies();
+    cookieStore.set('session', session, { 
+      expires, 
+      httpOnly: true, 
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/' 
+    });
+
+    return { success: true };
+  } catch (err: unknown) {
+    console.error('Erro no login:', err);
+    return { error: 'Ocorreu um erro ao realizar o login. Tente novamente.' };
   }
-
-  // Parse and validate form data with Zod
-  const rawData = Object.fromEntries(formData);
-  const validation = loginSchema.safeParse(rawData);
-  if (!validation.success) {
-    return { error: validation.error.issues[0].message };
-  }
-  const { identifier, password } = validation.data;
-
-  const userRes = await db.select().from(users).where(
-    or(eq(users.email, identifier), eq(users.phone, identifier))
-  );
-  
-  const user = userRes[0];
-  if (!user) return { error: 'Usuário não encontrado.' };
-
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) return { error: 'Senha incorreta.' };
-
-  const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  const session = await encrypt({ user: { id: user.id, name: user.name }, expires });
-
-  const cookieStore = await cookies();
-  cookieStore.set('session', session, { 
-    expires, 
-    httpOnly: true, 
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/' 
-  });
-
-  return { success: true };
 }
 
 export async function register(formData: FormData) {

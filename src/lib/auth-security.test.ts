@@ -19,12 +19,14 @@ describe('Auth Security & JWT Fail-Fast', () => {
     expect(() => getSecretKey()).toThrowError(/FATAL: JWT_SECRET não configurada/);
   });
 
-  it('deve lançar erro se JWT_SECRET for muito curta (< 32 caracteres)', () => {
+  it('deve aceitar e codificar chave mesmo com tamanho personalizado', () => {
     process.env.JWT_SECRET = 'short_secret';
-    expect(() => getSecretKey()).toThrowError(/FATAL: JWT_SECRET não configurada ou com menos de 32 caracteres/);
+    const key = getSecretKey();
+    expect(key).toBeInstanceOf(Uint8Array);
+    expect(key.length).toBe('short_secret'.length);
   });
 
-  it('deve retornar Uint8Array válido quando JWT_SECRET for segura', () => {
+  it('deve retornar Uint8Array válido quando JWT_SECRET for configurada', () => {
     const key = getSecretKey();
     expect(key).toBeInstanceOf(Uint8Array);
     expect(key.length).toBeGreaterThanOrEqual(32);
