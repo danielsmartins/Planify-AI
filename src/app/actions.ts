@@ -46,7 +46,7 @@ export async function createTransaction(formData: FormData) {
 
   // Se for despesa no cartão de crédito E não tiver conta vinculada (gasto normal no crédito)
   if (creditCardId && !accountId) {
-    const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, creditCardId));
+    const cardRes = await db.select().from(creditCards).where(and(eq(creditCards.id, creditCardId), eq(creditCards.userId, session.user.id)));
     if (cardRes.length > 0) {
       const card = cardRes[0];
       txDueDate = await calculateCreditCardDate(createdAt, Number(card.closingDay), Number(card.dueDay));
@@ -242,7 +242,7 @@ export async function updateTransaction(id: string, formData: FormData) {
   const { description, amount, category, createdAt } = validation.data;
 
   // Buscar a transação existente para saber se é cartão de crédito
-  const existingTx = await db.select().from(transactions).where(eq(transactions.id, id));
+  const existingTx = await db.select().from(transactions).where(and(eq(transactions.id, id), eq(transactions.userId, session.user.id)));
   let txDueDate = createdAt;
 
   if (existingTx.length > 0) {
@@ -320,7 +320,7 @@ export async function createInstallmentPurchase(formData: FormData) {
   let cardDueDay = 0;
 
   if (creditCardId) {
-    const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, creditCardId));
+    const cardRes = await db.select().from(creditCards).where(and(eq(creditCards.id, creditCardId), eq(creditCards.userId, session.user.id)));
     if (cardRes.length > 0) {
       cardClosingDay = Number(cardRes[0].closingDay);
       cardDueDay = Number(cardRes[0].dueDay);

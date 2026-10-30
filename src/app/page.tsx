@@ -11,6 +11,7 @@ import { LandingPage } from '@/components/layout/LandingPage';
 import { processAutoPayments } from '@/lib/auto-pay';
 import { processPendingSubscriptions } from '@/lib/subscriptions-billing';
 import { getTxDueDate, getInvoiceKey } from '@/lib/credit-card-helpers';
+import { generateTelegramLinkToken } from '@/lib/telegram-auth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -318,10 +319,10 @@ export default async function Home({
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <div className="bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-[10px] text-neutral-300 font-mono">
-            Vincular: <code className="text-[#0088cc] select-all font-semibold">/start {session.user.id}</code>
+            Vincular: <code className="text-[#0088cc] select-all font-semibold">/start {generateTelegramLinkToken(session.user.id)}</code>
           </div>
           <a 
-            href={`https://t.me/${process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'SeuBot'}?start=${session.user.id}`} 
+            href={`https://t.me/${process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'Planify_AI_Bot'}?start=${generateTelegramLinkToken(session.user.id)}`} 
             target="_blank" 
             className="bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-[#0088cc] hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ml-auto sm:ml-0"
           >

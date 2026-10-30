@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, transactions, categories, installments, accounts, creditCards } from "@/db/schema";
 import crypto from "crypto";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { extractFinancialData, extractInvoiceTransactions } from "@/lib/gemini";
 import { sendTelegramMessage, answerCallbackQuery, editTelegramMessage, editTelegramReplyMarkup } from "@/lib/telegram";
 import { 
@@ -15,6 +15,7 @@ import {
 } from "@/lib/telegram-utils";
 import { rateLimit } from "@/lib/rate-limit";
 import { calculateCreditCardDate } from "@/lib/credit-card-helpers";
+import { verifyTelegramLinkToken } from "@/lib/telegram-auth";
 
 // Polyfill DOMMatrix for Node.js environments (used by pdfjs-dist inside pdf-parse)
 if (typeof global !== 'undefined' && !('DOMMatrix' in global)) {
@@ -67,6 +68,12 @@ async function extractTextFromPdf(buffer: Buffer): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
+  // Validar webhook secret do Telegram se configurado
+  const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  const incomingSecret = req.headers.get("x-telegram-bot-api-secret-token");
+  if (expectedSecret && incomingSecret !== expectedSecret) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   // Apply Rate Limiting (max 60 requests per minute from Telegram)
   const limiter = await rateLimit(60, 60000);
   if (!limiter.success) {
@@ -94,6 +101,14 @@ export async function POST(req: NextRequest) {
       const callbackQuery = body.callback_query;
       const callbackData = callbackQuery.data; // ex: confirm_123, cancel_123, confirm_inst_123, toggle_type_123
       const messageId = callbackQuery.message?.message_id;
+
+      // Buscar usuário associado ao chatId para garantir titularidade das ações
+      const userRes = await db.select().from(users).where(eq(users.telegramChatId, chatId));
+      const user = userRes[0];
+      if (!user) {
+        await answerCallbackQuery(callbackQuery.id, "🔒 Conta não vinculada.");
+        return NextResponse.json({ status: "User not linked" });
+      }
       
       try {
         if (callbackData.startsWith('confirm_inst_')) {
@@ -103,7 +118,7 @@ export async function POST(req: NextRequest) {
           const instId = parts[0];
           const typeAndIndex = parts[1]; // c0, a1, etc.
           
-          const instRes = await db.select().from(installments).where(eq(installments.id, instId));
+          const instRes = await db.select().from(installments).where(and(eq(installments.id, instId), eq(installments.userId, user.id)));
           if (instRes.length > 0) {
             const inst = instRes[0];
             const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, inst.userId));
@@ -164,7 +179,7 @@ export async function POST(req: NextRequest) {
           const instId = callbackData.replace('cancel_inst_', '');
           
           // Reverter débito em conta se alguma parcela já havia sido confirmada
-          const relatedTxs = await db.select().from(transactions).where(eq(transactions.installmentId, instId));
+          const relatedTxs = await db.select().from(transactions).where(and(eq(transactions.installmentId, instId), eq(transactions.userId, user.id)));
           for (const tx of relatedTxs) {
             if (tx.status === 'confirmed' && tx.accountId) {
               const accRes = await db.select().from(accounts).where(eq(accounts.id, tx.accountId));
@@ -178,8 +193,8 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          await db.delete(transactions).where(eq(transactions.installmentId, instId));
-          await db.delete(installments).where(eq(installments.id, instId));
+          await db.delete(transactions).where(and(eq(transactions.installmentId, instId), eq(transactions.userId, user.id)));
+          await db.delete(installments).where(and(eq(installments.id, instId), eq(installments.userId, user.id)));
 
           if (messageId) {
             await editTelegramReplyMarkup(chatId, messageId, { inline_keyboard: [] });
@@ -188,7 +203,7 @@ export async function POST(req: NextRequest) {
 
         } else if (callbackData.startsWith('toggle_type_')) {
           const txId = callbackData.replace('toggle_type_', '');
-          const txRes = await db.select().from(transactions).where(eq(transactions.id, txId));
+          const txRes = await db.select().from(transactions).where(and(eq(transactions.id, txId), eq(transactions.userId, user.id)));
           if (txRes.length > 0 && txRes[0].status === 'pending') {
             const tx = txRes[0];
             const newType: 'income' | 'expense' = tx.type === 'income' ? 'expense' : 'income';
@@ -242,7 +257,7 @@ export async function POST(req: NextRequest) {
           const txId = parts[0];
           const typeAndIndex = parts[1]; // c0, a1, etc.
 
-          const txRes = await db.select().from(transactions).where(eq(transactions.id, txId));
+          const txRes = await db.select().from(transactions).where(and(eq(transactions.id, txId), eq(transactions.userId, user.id)));
           if (txRes.length > 0 && txRes[0].status === 'pending') {
             const tx = txRes[0];
             const userAccounts = await db.select().from(accounts).where(eq(accounts.userId, tx.userId));
@@ -314,7 +329,7 @@ export async function POST(req: NextRequest) {
 
         } else if (callbackData.startsWith('cancel_')) {
           const txId = callbackData.split('_')[1];
-          const txRes = await db.select().from(transactions).where(eq(transactions.id, txId));
+          const txRes = await db.select().from(transactions).where(and(eq(transactions.id, txId), eq(transactions.userId, user.id)));
           
           if (txRes.length > 0) {
             const tx = txRes[0];
@@ -333,7 +348,7 @@ export async function POST(req: NextRequest) {
               }
             }
 
-            await db.delete(transactions).where(eq(transactions.id, txId));
+            await db.delete(transactions).where(and(eq(transactions.id, txId), eq(transactions.userId, user.id)));
 
             if (messageId) {
               await editTelegramReplyMarkup(chatId, messageId, { inline_keyboard: [] });
@@ -624,9 +639,14 @@ O bot irá entender, categorizar automaticamente e pedir para você confirmar an
     if (textMessage && textMessage.startsWith("/start")) {
       const parts = textMessage.split(" ");
       if (parts.length > 1) {
-        const userId = parts[1];
+        const token = parts[1];
+        const verifiedUserId = verifyTelegramLinkToken(token);
+        if (!verifiedUserId) {
+          await sendTelegramMessage(chatId, "❌ Link de vinculação inválido ou expirado. Por favor, acesse o painel web do Planify AI e clique novamente em *Conectar Bot*.");
+          return NextResponse.json({ status: "Invalid token" });
+        }
         try {
-          await db.update(users).set({ telegramChatId: chatId }).where(eq(users.id, userId));
+          await db.update(users).set({ telegramChatId: chatId }).where(eq(users.id, verifiedUserId));
           await sendTelegramMessage(chatId, `🎉 *Conta vinculada com sucesso!*\n\nAgora você pode me enviar seus gastos ou ganhos diretamente por aqui, digitando ou por áudio.\n\nExemplo: \`Comprei pão por 15 reais no débito\`\n\nDigite /help para ver mais exemplos.\n\n📊 [Acessar o Dashboard](${appUrl})`);
           return NextResponse.json({ status: "Linked" });
         } catch {

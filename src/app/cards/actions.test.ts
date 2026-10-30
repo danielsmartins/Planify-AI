@@ -67,6 +67,26 @@ describe('Cards Actions', () => {
         dueDay: '12',
       }));
     });
+
+    it('returns error if autoPay is true and autoPayAccountId does not belong to user', async () => {
+      vi.mocked(getSession).mockResolvedValueOnce(mockSession as unknown as Awaited<ReturnType<typeof getSession>>);
+      const whereAcc = vi.fn().mockResolvedValueOnce([]); // empty: not found for user
+      const fromAcc = vi.fn().mockReturnValueOnce({ where: whereAcc });
+      vi.mocked(db.select).mockReturnValueOnce({ from: fromAcc } as unknown as ReturnType<typeof db.select>);
+
+      const formData = new FormData();
+      formData.append('name', 'Nubank Teste');
+      formData.append('color', '#8a05be');
+      formData.append('closingDay', '5');
+      formData.append('dueDay', '12');
+      formData.append('limitAmount', '5000');
+      formData.append('brand', 'mastercard');
+      formData.append('autoPay', 'true');
+      formData.append('autoPayAccountId', '550e8400-e29b-41d4-a716-446655440000');
+
+      const result = await addCreditCard(formData);
+      expect(result).toEqual({ error: 'Conta para débito automático não encontrada ou não autorizada.' });
+    });
   });
 
   describe('updateCreditCard', () => {

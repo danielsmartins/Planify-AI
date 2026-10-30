@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import { POST } from "../app/api/telegram/route";
-import fs from "fs";
 
 // Backup do fetch original
 const originalFetch = global.fetch;
@@ -25,13 +24,9 @@ global.fetch = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Re
 
   // Intercepta o download do arquivo PDF simulado
   if (url.includes("mock_invoice.pdf")) {
-    console.log("[MOCK FETCH] Interceptado download do PDF. Lendo arquivo de fatura local...");
-    const pdfPath = "C:\\Users\\Daniel\\.gemini\\antigravity\\brain\\b37a2b79-27f0-4d1a-9584-76e2d1632193\\media__1783794930731.pdf";
-    if (!fs.existsSync(pdfPath)) {
-      throw new Error(`Arquivo local de fatura PDF não encontrado no caminho: ${pdfPath}`);
-    }
-    const buffer = fs.readFileSync(pdfPath);
-    return new Response(buffer, {
+    console.log("[MOCK FETCH] Interceptado download do PDF. Retornando buffer de teste...");
+    const dummyPdfBuffer = Buffer.from("%PDF-1.4 Mock PDF content for test");
+    return new Response(dummyPdfBuffer, {
       status: 200,
       headers: { "Content-Type": "application/pdf" }
     });
@@ -48,14 +43,14 @@ async function runTest() {
     message: {
       message_id: 66,
       from: {
-        id: 6258340085,
+        id: 999999999,
         is_bot: false,
-        first_name: "Daniel",
+        first_name: "TestUser",
         language_code: "pt-br"
       },
       chat: {
-        id: 6258340085,
-        first_name: "Daniel",
+        id: 999999999,
+        first_name: "TestUser",
         type: "private"
       },
       date: 1783796797,

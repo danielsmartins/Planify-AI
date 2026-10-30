@@ -24,6 +24,8 @@ quality-gate-report.md
 # misc
 .DS_Store
 *.pem
+.venv/
+docs/security-audit/.venv/
 
 # debug
 npm-debug.log*

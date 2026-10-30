@@ -19,6 +19,15 @@ export async function addCreditCard(formData: FormData) {
   }
   const { name, color, closingDay, dueDay, limitAmount, brand, autoPay, autoPayAccountId } = validation.data;
 
+  if (autoPay && autoPayAccountId) {
+    const accRes = await db.select().from(accounts).where(
+      and(eq(accounts.id, autoPayAccountId), eq(accounts.userId, session.user.id))
+    );
+    if (accRes.length === 0) {
+      return { error: 'Conta para débito automático não encontrada ou não autorizada.' };
+    }
+  }
+
   await db.insert(creditCards).values({
     userId: session.user.id,
     name,
@@ -76,6 +85,15 @@ export async function updateCreditCard(id: string, formData: FormData) {
     return { error: validation.error.issues[0].message };
   }
   const { name, color, closingDay, dueDay, limitAmount, brand, autoPay, autoPayAccountId } = validation.data;
+
+  if (autoPay && autoPayAccountId) {
+    const accRes = await db.select().from(accounts).where(
+      and(eq(accounts.id, autoPayAccountId), eq(accounts.userId, session.user.id))
+    );
+    if (accRes.length === 0) {
+      return { error: 'Conta para débito automático não encontrada ou não autorizada.' };
+    }
+  }
 
   await db.update(creditCards).set({
     name,
