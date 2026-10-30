@@ -67,6 +67,26 @@ describe('Cards Actions', () => {
         dueDay: '12',
       }));
     });
+
+    it('returns error if autoPay is true and autoPayAccountId does not belong to user', async () => {
+      vi.mocked(getSession).mockResolvedValueOnce(mockSession as unknown as Awaited<ReturnType<typeof getSession>>);
+      const whereAcc = vi.fn().mockResolvedValueOnce([]); // empty: not found for user
+      const fromAcc = vi.fn().mockReturnValueOnce({ where: whereAcc });
+      vi.mocked(db.select).mockReturnValueOnce({ from: fromAcc } as unknown as ReturnType<typeof db.select>);
+
+      const formData = new FormData();
+      formData.append('name', 'Nubank Teste');
+      formData.append('color', '#8a05be');
+      formData.append('closingDay', '5');
+      formData.append('dueDay', '12');
+      formData.append('limitAmount', '5000');
+      formData.append('brand', 'mastercard');
+      formData.append('autoPay', 'true');
+      formData.append('autoPayAccountId', '550e8400-e29b-41d4-a716-446655440000');
+
+      const result = await addCreditCard(formData);
+      expect(result).toEqual({ error: 'Conta para débito automático não encontrada ou não autorizada.' });
+    });
   });
 
   describe('updateCreditCard', () => {
@@ -130,6 +150,14 @@ describe('Cards Actions', () => {
       await expect(payCreditCardInvoice('card-1', 'acc-1', 100, '2026-08-07')).rejects.toThrow('Unauthorized');
     });
 
+    it('throws error if payment amount is zero or negative', async () => {
+      vi.mocked(getSession).mockResolvedValueOnce(mockSession as unknown as Awaited<ReturnType<typeof getSession>>);
+      await expect(payCreditCardInvoice('card-1', 'acc-1', 0, '2026-08-07')).rejects.toThrow('Valor de pagamento inválido');
+
+      vi.mocked(getSession).mockResolvedValueOnce(mockSession as unknown as Awaited<ReturnType<typeof getSession>>);
+      await expect(payCreditCardInvoice('card-1', 'acc-1', -50, '2026-08-07')).rejects.toThrow('Valor de pagamento inválido');
+    });
+
     it('throws error if account is not found', async () => {
       vi.mocked(getSession).mockResolvedValueOnce(mockSession as unknown as Awaited<ReturnType<typeof getSession>>);
       const whereAcc = vi.fn().mockResolvedValueOnce([]);
@@ -137,6 +165,36 @@ describe('Cards Actions', () => {
       vi.mocked(db.select).mockReturnValueOnce({ from: fromAcc } as unknown as ReturnType<typeof db.select>);
 
       await expect(payCreditCardInvoice('card-1', 'acc-1', 100, '2026-08-07')).rejects.toThrow('Account not found');
+    });
+
+    it('throws error if account balance is insufficient', async () => {
+      vi.mocked(getSession).mockResolvedValueOnce(mockSession as unknown as Awaited<ReturnType<typeof getSession>>);
+      const mockAcc = { id: 'acc-1', balance: '50.00' };
+      const whereAcc = vi.fn().mockResolvedValueOnce([mockAcc]);
+      const fromAcc = vi.fn().mockReturnValueOnce({ where: whereAcc });
+      vi.mocked(db.select).mockReturnValueOnce({ from: fromAcc } as unknown as ReturnType<typeof db.select>);
+
+      await expect(payCreditCardInvoice('card-1', 'acc-1', 100, '2026-08-07')).rejects.toThrow('Saldo insuficiente');
+    });
+
+    it('throws error if credit card is not found or not owned by user', async () => {
+      vi.mocked(getSession).mockResolvedValueOnce(mockSession as unknown as Awaited<ReturnType<typeof getSession>>);
+      const mockAcc = { id: 'acc-1', balance: '500.00' };
+      const whereAcc = vi.fn().mockResolvedValueOnce([mockAcc]);
+      const fromAcc = vi.fn().mockReturnValueOnce({ where: whereAcc });
+
+      const whereCard = vi.fn().mockResolvedValueOnce([]); // not found or not owned
+      const fromCard = vi.fn().mockReturnValueOnce({ where: whereCard });
+
+      vi.mocked(db.select)
+        .mockReturnValueOnce({ from: fromAcc } as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce({ from: fromCard } as unknown as ReturnType<typeof db.select>);
+
+      const whereUpdateAcc = vi.fn().mockResolvedValueOnce(undefined);
+      const setUpdateAcc = vi.fn().mockReturnValueOnce({ where: whereUpdateAcc });
+      vi.mocked(db.update).mockReturnValueOnce({ set: setUpdateAcc } as unknown as ReturnType<typeof db.update>);
+
+      await expect(payCreditCardInvoice('card-1', 'acc-1', 100, '2026-08-07')).rejects.toThrow('Cartão de crédito não encontrado');
     });
 
     it('deducts balance from account and inserts payment transaction with targetDueDate', async () => {

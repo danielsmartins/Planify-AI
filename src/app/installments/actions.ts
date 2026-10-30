@@ -128,7 +128,7 @@ export async function updateInstallment(id: string, formData: FormData) {
   let cardDueDay = 0;
 
   if (creditCardId) {
-    const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, creditCardId));
+    const cardRes = await db.select().from(creditCards).where(and(eq(creditCards.id, creditCardId), eq(creditCards.userId, session.user.id)));
     if (cardRes.length > 0) {
       cardClosingDay = Number(cardRes[0].closingDay);
       cardDueDay = Number(cardRes[0].dueDay);

@@ -122,12 +122,17 @@ export function validateFinancialData(data: unknown): FinancialValidationResult 
   };
 }
 
+export function escapeTelegramMarkdown(text: string): string {
+  if (!text) return '';
+  return text.replace(/([_*[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
+}
+
 export function buildMissingAmountPrompt(
   description?: string,
   paymentMethodSuggestion?: string,
   isVoice?: boolean
 ): string {
-  const desc = description ? `*${description}*` : 'essa transação';
+  const desc = description ? `*${escapeTelegramMarkdown(description)}*` : 'essa transação';
   const suggestion = paymentMethodSuggestion ? ` no ${paymentMethodSuggestion}` : '';
   const example = description
     ? `\`${description} 50 reais${suggestion}\``
@@ -162,7 +167,10 @@ export function buildReviewMessage(
   const icone = data.type === 'income' ? '✅' : '💸';
   const sugg = suggestionText ? `\n${suggestionText}` : '';
 
-  return `${icone} *Revisão de Transação*\n\nTipo: *${tipo}*\nDescrição: *${data.description}*\nValor: *R$ ${data.amount}*\nCategoria: *${data.category}*${sugg}\n\nSelecione onde foi feito o pagamento/recebimento para confirmar:`;
+  const safeDesc = escapeTelegramMarkdown(data.description);
+  const safeCat = escapeTelegramMarkdown(data.category);
+
+  return `${icone} *Revisão de Transação*\n\nTipo: *${tipo}*\nDescrição: *${safeDesc}*\nValor: *R$ ${data.amount}*\nCategoria: *${safeCat}*${sugg}\n\nSelecione onde foi feito o pagamento/recebimento para confirmar:`;
 }
 
 export interface KeyboardOption {

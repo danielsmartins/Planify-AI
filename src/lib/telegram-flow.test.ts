@@ -6,6 +6,7 @@ import {
   revertAccountBalance,
   buildReviewMessage,
   buildReviewKeyboard,
+  escapeTelegramMarkdown,
 } from '@/lib/telegram-utils';
 
 describe('Telegram Suggestion Logic', () => {
@@ -273,5 +274,21 @@ describe('Telegram Review Message & Keyboard Builder', () => {
     // Cancel button
     expect(flat.some(btn => btn.text === '❌ Cancelar' && btn.callback_data === 'cancel_tx-456')).toBe(true);
   });
-});
 
+  test('escapes special characters in Telegram markdown strings', () => {
+    const raw = 'Compra_Super*Mercado [50%] `code` (test)';
+    const escaped = escapeTelegramMarkdown(raw);
+    expect(escaped).toBe('Compra\\_Super\\*Mercado \\[50%\\] \\`code\\` \\(test\\)');
+  });
+
+  test('buildReviewMessage sanitizes user description and category with markdown', () => {
+    const msg = buildReviewMessage({
+      type: 'expense',
+      description: 'Super_Mercado*Desconto',
+      amount: 100,
+      category: 'Alimentação_Extra',
+    });
+    expect(msg).toContain('Super\\_Mercado\\*Desconto');
+    expect(msg).toContain('Alimentação\\_Extra');
+  });
+});

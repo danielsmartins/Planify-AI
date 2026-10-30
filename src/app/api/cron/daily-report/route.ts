@@ -4,15 +4,14 @@ import { users, transactions } from '@/db/schema';
 import { eq, and, sql, isNotNull } from 'drizzle-orm';
 import { sendTelegramMessage } from '@/lib/telegram';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: Request) {
-  // Autenticação básica para o Cron Job
+  // Autenticação obrigatória para o Cron Job
   const authHeader = req.headers.get('authorization');
+  const expectedSecret = process.env.CRON_SECRET;
   
-  if (
-    process.env.NODE_ENV === 'production' && 
-    process.env.CRON_SECRET && 
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
+  if (!expectedSecret || authHeader !== `Bearer ${expectedSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

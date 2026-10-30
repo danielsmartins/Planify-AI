@@ -70,4 +70,7 @@ jobs:
 
     - name: Build Project
       run: npm run build
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgres://dummy:dummy@dummy/dummy' }}
+        JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci_test_dummy_jwt_secret_at_least_32_bytes_long' }}
 

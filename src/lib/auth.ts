@@ -16,21 +16,25 @@ export interface SessionPayload {
   expires: string | Date;
 }
 
-const secretKey = new TextEncoder().encode(process.env.JWT_SECRET || 'super_secret_key_planify');
+import { getSecretKey } from './auth-key';
 
 export async function encrypt(payload: SessionPayload & Record<string, unknown>) {
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
-    .sign(secretKey);
+    .sign(getSecretKey());
 }
 
 export async function decrypt(input: string): Promise<SessionPayload | null> {
-  const { payload } = await jwtVerify(input, secretKey, {
-    algorithms: ['HS256'],
-  });
-  return payload as unknown as SessionPayload;
+  try {
+    const { payload } = await jwtVerify(input, getSecretKey(), {
+      algorithms: ['HS256'],
+    });
+    return payload as unknown as SessionPayload;
+  } catch {
+    return null;
+  }
 }
 
 export async function login(formData: FormData) {

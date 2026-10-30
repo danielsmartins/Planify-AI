@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth';
 import { extractInvoiceTransactions } from '@/lib/gemini';
 import { db } from '@/db';
 import { transactions, categories, creditCards } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 // Polyfill DOMMatrix for Node.js environments (used by pdfjs-dist inside pdf-parse)
 if (typeof global !== 'undefined' && !('DOMMatrix' in global)) {
@@ -85,20 +85,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Não foi possível encontrar texto no PDF.' }, { status: 400 });
     }
 
-    // Calcular data baseada no cartão de crédito
-    let txDate = new Date();
-    const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, creditCardId));
-    
-    if (cardRes.length > 0) {
-      const card = cardRes[0];
-      const resultDate = new Date();
-      const currentDay = resultDate.getDate();
-      if (currentDay >= Number(card.closingDay)) {
-        resultDate.setMonth(resultDate.getMonth() + 1);
-      }
-      resultDate.setDate(Number(card.dueDay));
-      txDate = resultDate;
+    // Validar se o cartão de crédito pertence ao usuário autenticado
+    const cardRes = await db.select().from(creditCards).where(
+      and(eq(creditCards.id, creditCardId), eq(creditCards.userId, session.user.id))
+    );
+    if (cardRes.length === 0) {
+      return NextResponse.json({ error: 'Cartão de crédito não encontrado ou não autorizado.' }, { status: 403 });
     }
+
+    const card = cardRes[0];
+    const resultDate = new Date();
+    const currentDay = resultDate.getDate();
+    if (currentDay >= Number(card.closingDay)) {
+      resultDate.setMonth(resultDate.getMonth() + 1);
+    }
+    resultDate.setDate(Number(card.dueDay));
+    const txDate = resultDate;
 
     const referenceDateStr = txDate.toISOString().split('T')[0];
 
