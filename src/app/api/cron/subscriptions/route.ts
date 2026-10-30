@@ -13,6 +13,8 @@ function calculateCreditCardDate(baseDate: Date, closingDay: number, dueDay: num
   return resultDate;
 }
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: Request) {
   // Autenticação obrigatória para o Cron Job
   const authHeader = req.headers.get('authorization');

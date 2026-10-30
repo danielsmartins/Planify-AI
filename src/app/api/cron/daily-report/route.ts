@@ -4,6 +4,8 @@ import { users, transactions } from '@/db/schema';
 import { eq, and, sql, isNotNull } from 'drizzle-orm';
 import { sendTelegramMessage } from '@/lib/telegram';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: Request) {
   // Autenticação obrigatória para o Cron Job
   const authHeader = req.headers.get('authorization');
