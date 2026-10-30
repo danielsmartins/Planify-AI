@@ -126,22 +126,42 @@ export async function payCreditCardInvoice(
   if (!session) throw new Error('Unauthorized');
 
   const parsedAmount = parseFloat(amount.toString());
-  const txDate = new Date(dateStr);
-  const dueDate = targetDueDateStr ? new Date(targetDueDateStr) : txDate;
+  if (isNaN(parsedAmount) || !isFinite(parsedAmount) || parsedAmount <= 0) {
+    throw new Error('Valor de pagamento inválido. O valor deve ser maior que zero.');
+  }
 
-  // Descontar do saldo da conta
+  const txDate = new Date(dateStr);
+  if (isNaN(txDate.getTime())) {
+    throw new Error('Data de pagamento inválida.');
+  }
+
+  let dueDate = txDate;
+  if (targetDueDateStr) {
+    const parsedTargetDueDate = new Date(targetDueDateStr);
+    if (!isNaN(parsedTargetDueDate.getTime())) {
+      dueDate = parsedTargetDueDate;
+    }
+  }
+
+  // 1. Descontar do saldo da conta com validação de posse e verificação de saldo suficiente
   const accRes = await db.select().from(accounts).where(and(eq(accounts.id, accountId), eq(accounts.userId, session.user.id)));
   if (accRes.length === 0) throw new Error('Account not found');
   const acc = accRes[0];
   const currentBalance = parseFloat(acc.balance);
+  if (currentBalance < parsedAmount) {
+    throw new Error('Saldo insuficiente na conta para realizar o pagamento.');
+  }
   const newBalance = currentBalance - parsedAmount;
-  await db.update(accounts).set({ balance: newBalance.toString() }).where(eq(accounts.id, acc.id));
+  await db.update(accounts).set({ balance: newBalance.toString() }).where(and(eq(accounts.id, acc.id), eq(accounts.userId, session.user.id)));
 
-  // Buscar nome do cartão para a descrição
+  // 2. Validar propriedade obrigatória do cartão de crédito
   const cardRes = await db.select().from(creditCards).where(and(eq(creditCards.id, cardId), eq(creditCards.userId, session.user.id)));
-  const cardName = cardRes.length > 0 ? cardRes[0].name : 'Cartão';
+  if (cardRes.length === 0) {
+    throw new Error('Cartão de crédito não encontrado ou não autorizado.');
+  }
+  const cardName = cardRes[0].name;
 
-  // Inserir transação de pagamento de fatura
+  // 3. Inserir transação de pagamento de fatura
   await db.insert(transactions).values({
     userId: session.user.id,
     amount: parsedAmount.toString(),

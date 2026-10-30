@@ -6,7 +6,8 @@ import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { eq, and } from 'drizzle-orm';
 import { extractFinancialData } from '@/lib/gemini';
-import { transactionSchema, installmentPurchaseSchema } from '@/lib/validations';
+import { transactionSchema, installmentPurchaseSchema, onboardingSchema } from '@/lib/validations';
+import type { z } from 'zod';
 
 import { calculateCreditCardDate as calcCCDate } from '@/lib/credit-card-helpers';
 
@@ -44,27 +45,35 @@ export async function createTransaction(formData: FormData) {
   let txDueDate: Date | null = null;
   const parsedAmount = amount;
 
-  // Se for despesa no cartão de crédito E não tiver conta vinculada (gasto normal no crédito)
-  if (creditCardId && !accountId) {
-    const cardRes = await db.select().from(creditCards).where(and(eq(creditCards.id, creditCardId), eq(creditCards.userId, session.user.id)));
-    if (cardRes.length > 0) {
+  // Se for despesa no cartão de crédito, validar obrigatoriamente a posse do cartão
+  if (creditCardId) {
+    const cardRes = await db.select().from(creditCards).where(
+      and(eq(creditCards.id, creditCardId), eq(creditCards.userId, session.user.id))
+    );
+    if (cardRes.length === 0) {
+      return { error: 'Cartão de crédito não encontrado ou não autorizado.' };
+    }
+    if (!accountId) {
       const card = cardRes[0];
       txDueDate = await calculateCreditCardDate(createdAt, Number(card.closingDay), Number(card.dueDay));
     }
   }
 
-  // Se houver conta associada (Receita, Despesa direta ou Pagamento de fatura de cartão)
+  // Se houver conta associada, validar obrigatoriamente a posse da conta
   if (accountId) {
-    const accRes = await db.select().from(accounts).where(and(eq(accounts.id, accountId), eq(accounts.userId, session.user.id)));
-    if (accRes.length > 0) {
-      const acc = accRes[0];
-      const currentBalance = parseFloat(acc.balance);
-      const newBalance = type === 'income' ? currentBalance + parsedAmount : currentBalance - parsedAmount;
-      
-      await db.update(accounts)
-        .set({ balance: newBalance.toString() })
-        .where(eq(accounts.id, acc.id));
+    const accRes = await db.select().from(accounts).where(
+      and(eq(accounts.id, accountId), eq(accounts.userId, session.user.id))
+    );
+    if (accRes.length === 0) {
+      return { error: 'Conta bancária não encontrada ou não autorizada.' };
     }
+    const acc = accRes[0];
+    const currentBalance = parseFloat(acc.balance);
+    const newBalance = type === 'income' ? currentBalance + parsedAmount : currentBalance - parsedAmount;
+    
+    await db.update(accounts)
+      .set({ balance: newBalance.toString() })
+      .where(and(eq(accounts.id, acc.id), eq(accounts.userId, session.user.id)));
   }
 
   await db.insert(transactions).values({
@@ -154,7 +163,9 @@ export async function addTransactionViaAI(text: string) {
       if (acc) {
         const currentBalance = parseFloat(acc.balance);
         const newBalance = extractedData.type === 'income' ? currentBalance + parsedAmount : currentBalance - parsedAmount;
-        await db.update(accounts).set({ balance: newBalance.toString() }).where(eq(accounts.id, accountId));
+        await db.update(accounts).set({ balance: newBalance.toString() }).where(
+          and(eq(accounts.id, accountId), eq(accounts.userId, session.user.id))
+        );
       }
     }
 
@@ -200,7 +211,9 @@ export async function deleteTransaction(id: string) {
     
     // Se tinha uma conta atrelada, desfazer a operação no saldo
     if (tx.accountId) {
-      const accRes = await db.select().from(accounts).where(eq(accounts.id, tx.accountId));
+      const accRes = await db.select().from(accounts).where(
+        and(eq(accounts.id, tx.accountId), eq(accounts.userId, session.user.id))
+      );
       if (accRes.length > 0) {
         const acc = accRes[0];
         const currentBalance = parseFloat(acc.balance);
@@ -208,7 +221,9 @@ export async function deleteTransaction(id: string) {
         // Desfazer: se era despesa, soma de volta. Se era receita, subtrai de volta.
         const newBalance = tx.type === 'expense' ? currentBalance + parsedAmount : currentBalance - parsedAmount;
         
-        await db.update(accounts).set({ balance: newBalance.toString() }).where(eq(accounts.id, tx.accountId));
+        await db.update(accounts).set({ balance: newBalance.toString() }).where(
+          and(eq(accounts.id, tx.accountId), eq(accounts.userId, session.user.id))
+        );
       }
     }
 
@@ -248,7 +263,9 @@ export async function updateTransaction(id: string, formData: FormData) {
   if (existingTx.length > 0) {
     const tx = existingTx[0];
     if (tx.creditCardId && !tx.accountId) {
-      const cardRes = await db.select().from(creditCards).where(eq(creditCards.id, tx.creditCardId));
+      const cardRes = await db.select().from(creditCards).where(
+        and(eq(creditCards.id, tx.creditCardId), eq(creditCards.userId, session.user.id))
+      );
       if (cardRes.length > 0) {
         const card = cardRes[0];
         txDueDate = await calculateCreditCardDate(createdAt, Number(card.closingDay), Number(card.dueDay));
@@ -292,6 +309,28 @@ export async function createInstallmentPurchase(formData: FormData) {
     return { error: 'A parcela atual não pode ser maior que o total de parcelas.' };
   }
 
+  // 1. Validar posse obrigatória do cartão de crédito
+  const cardRes = await db.select().from(creditCards).where(
+    and(eq(creditCards.id, creditCardId), eq(creditCards.userId, session.user.id))
+  );
+  if (cardRes.length === 0) {
+    return { error: 'Cartão de crédito não encontrado ou não autorizado.' };
+  }
+  const cardClosingDay = Number(cardRes[0].closingDay);
+  const cardDueDay = Number(cardRes[0].dueDay);
+
+  // 2. Se houver conta associada, validar posse antes de criar
+  let accToUpdate: typeof accounts.$inferSelect | null = null;
+  if (accountId) {
+    const accRes = await db.select().from(accounts).where(
+      and(eq(accounts.id, accountId), eq(accounts.userId, session.user.id))
+    );
+    if (accRes.length === 0) {
+      return { error: 'Conta associada não encontrada ou não autorizada.' };
+    }
+    accToUpdate = accRes[0];
+  }
+
   const totalAmount = amount * installmentsCount;
 
   // Insert master installment record
@@ -305,26 +344,13 @@ export async function createInstallmentPurchase(formData: FormData) {
     createdAt: createdAt,
   }).returning({ id: installments.id });
 
-  // Se houver conta associada, desconta o valor da parcela atual do saldo da conta
-  if (accountId) {
-    const accRes = await db.select().from(accounts).where(and(eq(accounts.id, accountId), eq(accounts.userId, session.user.id)));
-    if (accRes.length > 0) {
-      const acc = accRes[0];
-      const currentBalance = parseFloat(acc.balance);
-      const newBalance = currentBalance - amount;
-      await db.update(accounts).set({ balance: newBalance.toString() }).where(eq(accounts.id, acc.id));
-    }
-  }
-
-  let cardClosingDay = 0;
-  let cardDueDay = 0;
-
-  if (creditCardId) {
-    const cardRes = await db.select().from(creditCards).where(and(eq(creditCards.id, creditCardId), eq(creditCards.userId, session.user.id)));
-    if (cardRes.length > 0) {
-      cardClosingDay = Number(cardRes[0].closingDay);
-      cardDueDay = Number(cardRes[0].dueDay);
-    }
+  // Desconta o valor da parcela atual do saldo da conta vinculada
+  if (accToUpdate) {
+    const currentBalance = parseFloat(accToUpdate.balance);
+    const newBalance = currentBalance - amount;
+    await db.update(accounts).set({ balance: newBalance.toString() }).where(
+      and(eq(accounts.id, accToUpdate.id), eq(accounts.userId, session.user.id))
+    );
   }
 
   // Generate transactions for the remaining installments
@@ -368,41 +394,16 @@ export async function createInstallmentPurchase(formData: FormData) {
   return { success: true };
 }
 
-export async function completeOnboarding(data: {
-  account: {
-    name: string;
-    type: 'checking' | 'savings' | 'investment' | 'cash';
-    color: string;
-    balance: number;
-  };
-  creditCards: Array<{
-    name: string;
-    limitAmount: number;
-    closingDay: number;
-    dueDay: number;
-    color: string;
-    brand: string;
-  }>;
-  categories: Array<{
-    name: string;
-    color: string;
-    monthlyLimit: number;
-  }>;
-  expenses: Array<{
-    description: string;
-    amount: number;
-    category: string;
-    date: string;
-    paymentType: 'account' | 'card';
-    paymentTargetName?: string;
-  }>;
-}) {
+export async function completeOnboarding(rawData: z.infer<typeof onboardingSchema>) {
   const session = await getSession();
   if (!session) return { error: 'Não autorizado' };
 
-  if (!data.account.name || !data.account.type || !data.account.color || data.account.balance === undefined) {
-    return { error: 'Preencha todos os campos obrigatórios da conta bancária.' };
+  // Parse and validate with Zod
+  const validation = onboardingSchema.safeParse(rawData);
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message };
   }
+  const data = validation.data;
 
   try {
     // 1. Criar a conta bancária inicial com o saldo informado
@@ -511,4 +512,3 @@ export async function skipOnboarding() {
     return { error: 'Erro ao pular o passo a passo.' };
   }
 }
-

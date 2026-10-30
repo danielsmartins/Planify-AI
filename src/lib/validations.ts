@@ -57,7 +57,14 @@ export const accountSchema = z.object({
   name: z.string().trim().min(1, 'O nome da conta é obrigatório.').max(100),
   type: z.enum(['checking', 'savings', 'investment', 'cash']).default('checking'),
   color: z.string().trim().min(3).max(20),
-  balance: z.coerce.number(),
+  balance: z.coerce.number().finite(),
+});
+
+export const updateAccountSchema = z.object({
+  name: z.string().trim().min(1, 'O nome da conta é obrigatório.').max(100).optional(),
+  type: z.enum(['checking', 'savings', 'investment', 'cash']).optional(),
+  color: z.string().trim().min(3).max(20).optional(),
+  balance: z.coerce.number().finite().optional(),
 });
 
 // 6. Credit Card Schema
@@ -101,3 +108,33 @@ export const updateInstallmentSchema = z.object({
   createdAt: z.union([z.string(), z.date(), z.null()]).transform(val => val ? new Date(val) : new Date()),
 });
 
+// 9. Onboarding Schema
+export const onboardingSchema = z.object({
+  account: z.object({
+    name: z.string().trim().min(1, 'Nome da conta é obrigatório.').max(100),
+    type: z.enum(['checking', 'savings', 'investment', 'cash']),
+    color: z.string().trim().min(3).max(20),
+    balance: z.coerce.number().finite().default(0),
+  }),
+  creditCards: z.array(z.object({
+    name: z.string().trim().min(1, 'Nome do cartão é obrigatório.').max(100),
+    limitAmount: z.coerce.number().nonnegative('Limite deve ser maior ou igual a zero.').default(0),
+    closingDay: z.coerce.number().int().min(1, 'Dia de fechamento inválido.').max(31, 'Dia de fechamento inválido.'),
+    dueDay: z.coerce.number().int().min(1, 'Dia de vencimento inválido.').max(31, 'Dia de vencimento inválido.'),
+    color: z.string().trim().min(3).max(20).default('#64748b'),
+    brand: z.string().trim().min(1).default('mastercard'),
+  })).optional().default([]),
+  categories: z.array(z.object({
+    name: z.string().trim().min(1, 'Nome da categoria é obrigatório.').max(100),
+    color: z.string().trim().min(3).max(20),
+    monthlyLimit: z.coerce.number().nonnegative('Limite mensal inválido.').default(0),
+  })).optional().default([]),
+  expenses: z.array(z.object({
+    description: z.string().trim().min(1, 'Descrição é obrigatória.').max(200),
+    amount: z.coerce.number().positive('O valor deve ser maior que zero.'),
+    category: z.string().trim().min(1).default('Outros'),
+    date: z.union([z.string(), z.date(), z.null()]).optional(),
+    paymentType: z.enum(['account', 'card']),
+    paymentTargetName: z.string().optional(),
+  })).optional().default([]),
+});

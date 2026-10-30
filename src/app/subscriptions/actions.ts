@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/db';
-import { subscriptions } from '@/db/schema';
+import { subscriptions, accounts, creditCards } from '@/db/schema';
 import { getSession } from '@/lib/auth';
 import { eq, and } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
@@ -20,6 +20,26 @@ export async function addSubscription(formData: FormData) {
   }
   const { name, amount, category, billingCycle, nextBillingDate, accountId, creditCardId, color } = validation.data;
 
+  // Validar se a conta informada pertence ao usuário autenticado
+  if (accountId) {
+    const accRes = await db.select().from(accounts).where(
+      and(eq(accounts.id, accountId), eq(accounts.userId, session.user.id))
+    );
+    if (accRes.length === 0) {
+      return { error: 'Conta selecionada não encontrada ou não autorizada.' };
+    }
+  }
+
+  // Validar se o cartão de crédito informado pertence ao usuário autenticado
+  if (creditCardId) {
+    const cardRes = await db.select().from(creditCards).where(
+      and(eq(creditCards.id, creditCardId), eq(creditCards.userId, session.user.id))
+    );
+    if (cardRes.length === 0) {
+      return { error: 'Cartão de crédito selecionado não encontrado ou não autorizado.' };
+    }
+  }
+
   await db.insert(subscriptions).values({
     userId: session.user.id,
     name,
@@ -34,6 +54,7 @@ export async function addSubscription(formData: FormData) {
   });
 
   revalidatePath('/subscriptions');
+  return { success: true };
 }
 
 export async function deleteSubscription(id: string) {
@@ -44,6 +65,7 @@ export async function deleteSubscription(id: string) {
     .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, session.user.id)));
 
   revalidatePath('/subscriptions');
+  return { success: true };
 }
 
 export async function toggleSubscriptionStatus(id: string, currentStatus: string) {
@@ -57,4 +79,5 @@ export async function toggleSubscriptionStatus(id: string, currentStatus: string
     .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, session.user.id)));
 
   revalidatePath('/subscriptions');
+  return { success: true };
 }
