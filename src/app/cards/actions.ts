@@ -143,23 +143,21 @@ export async function payCreditCardInvoice(
     }
   }
 
-  // 1. Descontar do saldo da conta com validação de posse e verificação de saldo suficiente
+  // 1. Validar posse da conta e do cartão antes de qualquer alteração
   const accRes = await db.select().from(accounts).where(and(eq(accounts.id, accountId), eq(accounts.userId, session.user.id)));
   if (accRes.length === 0) throw new Error('Account not found');
   const acc = accRes[0];
-  const currentBalance = parseFloat(acc.balance);
-  if (currentBalance < parsedAmount) {
-    throw new Error('Saldo insuficiente na conta para realizar o pagamento.');
-  }
-  const newBalance = currentBalance - parsedAmount;
-  await db.update(accounts).set({ balance: newBalance.toString() }).where(and(eq(accounts.id, acc.id), eq(accounts.userId, session.user.id)));
 
-  // 2. Validar propriedade obrigatória do cartão de crédito
   const cardRes = await db.select().from(creditCards).where(and(eq(creditCards.id, cardId), eq(creditCards.userId, session.user.id)));
   if (cardRes.length === 0) {
     throw new Error('Cartão de crédito não encontrado ou não autorizado.');
   }
   const cardName = cardRes[0].name;
+
+  // 2. Descontar do saldo da conta (permite saldo negativo temporário)
+  const currentBalance = parseFloat(acc.balance);
+  const newBalance = Math.round((currentBalance - parsedAmount) * 100) / 100;
+  await db.update(accounts).set({ balance: newBalance.toString() }).where(and(eq(accounts.id, acc.id), eq(accounts.userId, session.user.id)));
 
   // 3. Inserir transação de pagamento de fatura
   await db.insert(transactions).values({

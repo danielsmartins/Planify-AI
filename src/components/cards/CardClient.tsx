@@ -26,6 +26,7 @@ interface CardProps {
 interface AccountProps {
   id: string;
   name: string;
+  balance?: string;
 }
 
 interface CardTransactionProps {
@@ -95,6 +96,7 @@ export function CardClient({
   const [payAccountId, setPayAccountId] = useState('');
   const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0]);
   const [payTargetDueDate, setPayTargetDueDate] = useState<string | undefined>(undefined);
+  const [payError, setPayError] = useState('');
 
   const [formName, setFormName] = useState('');
   const [formColor, setFormColor] = useState('#10b981');
@@ -113,6 +115,7 @@ export function CardClient({
   const handlePayInvoice = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!payingCard || !payAccountId || !payAmount) return;
+    setPayError('');
 
     startTransition(() => {
       payCreditCardInvoice(
@@ -121,13 +124,19 @@ export function CardClient({
         parseFloat(payAmount), 
         payDate,
         payTargetDueDate
-      ).then(() => {
-        setPayingCard(null);
-        setPayAmount('');
-        setPayAccountId('');
-        setPayTargetDueDate(undefined);
-        router.refresh();
-      });
+      )
+        .then(() => {
+          setPayingCard(null);
+          setPayAmount('');
+          setPayAccountId('');
+          setPayTargetDueDate(undefined);
+          setPayError('');
+          router.refresh();
+        })
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : 'Erro ao confirmar pagamento da fatura.';
+          setPayError(message);
+        });
     });
   };
 
@@ -370,6 +379,7 @@ export function CardClient({
                         setPayingCard(card);
                         setPayAmount(card.invoiceAmount!);
                         setPayTargetDueDate(targetDueDate.toISOString());
+                        setPayError('');
                         if (accounts.length > 0) setPayAccountId(accounts[0].id);
                       }}
                       className="bg-white hover:bg-white/90 text-black px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md select-none z-10"
@@ -604,11 +614,25 @@ export function CardClient({
       )}
 
       {/* Modal de Pagamento de Fatura */}
-      {payingCard && (
+      {payingCard && (() => {
+        const selectedPayAccount = accounts.find(a => a.id === payAccountId);
+        const parsedPayAmount = parseFloat(payAmount);
+        const selectedAccountBalance = selectedPayAccount?.balance !== undefined
+          ? parseFloat(selectedPayAccount.balance)
+          : null;
+        const willBeNegative = selectedAccountBalance !== null
+          && !isNaN(parsedPayAmount)
+          && parsedPayAmount > 0
+          && selectedAccountBalance < parsedPayAmount;
+        const projectedBalance = willBeNegative && selectedAccountBalance !== null
+          ? Math.round((selectedAccountBalance - parsedPayAmount) * 100) / 100
+          : null;
+
+        return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-2xl w-full max-w-md relative animate-in fade-in zoom-in duration-200">
             <button 
-              onClick={() => { setPayingCard(null); setPayAmount(''); setPayAccountId(''); setPayTargetDueDate(undefined); }} 
+              onClick={() => { setPayingCard(null); setPayAmount(''); setPayAccountId(''); setPayTargetDueDate(undefined); setPayError(''); }} 
               className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
             >
               <X size={20}/>
@@ -640,7 +664,9 @@ export function CardClient({
                 >
                   <option value="" disabled>Selecione a conta pagadora...</option>
                   {accounts.map(a => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
+                    <option key={a.id} value={a.id}>
+                      {a.balance !== undefined ? `${a.name} (${formatBRL(a.balance)})` : a.name}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -656,6 +682,19 @@ export function CardClient({
                 />
               </div>
 
+              {willBeNegative && projectedBalance !== null && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs">
+                  Saldo insuficiente nesta conta. Ao confirmar, o saldo ficará negativo em{' '}
+                  <strong>{formatBRL(projectedBalance)}</strong> até você repor o valor.
+                </div>
+              )}
+
+              {payError && (
+                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs">
+                  {payError}
+                </div>
+              )}
+
               <button 
                 type="submit" 
                 disabled={isPending || accounts.length === 0}
@@ -666,7 +705,8 @@ export function CardClient({
             </form>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Modal de Detalhes do Cartão com Navegação de Faturas */}
       {viewingCardDetails && (() => {
@@ -840,6 +880,7 @@ export function CardClient({
                         setPayAmount(outstandingBalance.toString());
                         setPayDate(new Date().toISOString().split('T')[0]);
                         setPayTargetDueDate(invoiceDueDate.toISOString());
+                        setPayError('');
                         if (accounts.length > 0) setPayAccountId(accounts[0].id);
                         setViewingCardDetails(null);
                       }}
